@@ -11,21 +11,35 @@ const (
 	maxRevisionLength = 3 + len(_draftStr)
 )
 
+// NewRevision returns the first version draft revision "A.1-draft".
+func NewRevision() Revision {
+	return Revision{
+		Index:     [2]byte{'A', '1'},
+		IsRelease: false,
+	}
+}
+
+// Revision holds version code information of a document.
+//
+// When registered new documents should be given revision index A.1 and a non
+// released status.
+//
+// Prior to release, new revisions of draft documents are given the revision
+// index A.1, A.2, A.3 and so on.
+//
+// In the case of a minor change only the second digit/character of the
+// revision index is incremented, for example from C.0 to C.1 or B.3 to B.4.
+//
+// In the case of a major change the first digit of the revision index
+// is incremented while the second is set to 0.
+// (or A if using alphanumeric revision index)
+// Example:
+//  A.4 -> B.0
 type Revision struct {
 	// Index is the document revision index and is
 	// composed by two digits separated by a dot (or alphanumeric characters).
 	Index [2]byte
-	// When registered new documents are given revision index 0.1 or 0.A followed
-	// by the text "-draft".
-	// Prior to release, new revisions of draft documents are given the revision
-	// index 0.1, 0.2, 0.3 or using alphanumeric revision index: 0.A, 0.B, 0.C.
-	//
-	// In the case of a minor change only the second digit/character of the
-	// revision index is incremented, for example from 1.0 to 1.1.
-	//
-	// In the case of a major change the first digit of the revision index
-	// is incremented while the second is set to 0
-	// (or A if using alphanumeric revision index)
+
 	IsRelease bool
 }
 
@@ -53,7 +67,7 @@ func ParseRevision(revision string) (Revision, error) {
 	return r, nil
 }
 
-// String returns the revision index as a string. i.e. "0.1-draft" or "2.A"
+// String returns the revision index as a string. i.e. "A.1-draft" or "A.2"
 // If the DocInfo's revision index is invalid it returns a constant string.
 func (d Revision) String() string {
 	if d.Validate() != nil {
@@ -68,10 +82,19 @@ func (d Revision) String() string {
 
 // Validate tests the Revision is valid and returns ErrBadRevisionIndex if it is not.
 func (d Revision) Validate() error {
+	if d.Index == (Revision{}).Index {
+		return errors.New("revision not initialized")
+	}
 	alphaNum1 := isAlphaNum(d.Index[1])
 	if !alphaNum1 || isAlphaNum(d.Index[1]) && !isAlphaNum(d.Index[0]) ||
 		!isNum(d.Index[0]) {
 		return ErrBadRevisionIndex
+	}
+	if d.Index == [2]byte{'A', '0'} {
+		return errors.New("first revision must have non-zero minor index")
+	}
+	if d.Index == [2]byte{'A', '1'} && d.IsRelease {
+		return errors.New("first revision must be draft")
 	}
 	return nil
 }
@@ -82,7 +105,7 @@ func (d Revision) IncrementMinor(isRelease bool) (Revision, error) {
 	if err := d.Validate(); err != nil {
 		return Revision{}, err
 	}
-	if d.Index[1] == 'Z' || d.Index[1] == '9' {
+	if d.Index[1] == '9' {
 		return Revision{}, errors.New("revision minor index overflow")
 	}
 	d.Index[1]++
@@ -96,16 +119,8 @@ func (d Revision) IncrementMajor(isRelease bool) (Revision, error) {
 	if err := d.Validate(); err != nil {
 		return Revision{}, err
 	}
-	if d.Index[0] == 'Z' || d.Index[0] == '9' && isNum(d.Index[1]) {
+	if d.Index[0] == 'Z' {
 		return Revision{}, errors.New("revision major index overflow")
-	}
-	if isAlpha(d.Index[1]) {
-		d.Index[1] = 'A'
-		if d.Index[0] == '9' {
-			d.Index[0] = 'A' - 1
-		}
-	} else {
-		d.Index[1] = '0'
 	}
 	d.Index[0]++
 	d.IsRelease = isRelease

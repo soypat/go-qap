@@ -1,3 +1,8 @@
+main {
+    margin: 10px;
+    padding: 5px;
+}
+
 form.main {
     border: 2px solid black;
     margin: 10px;

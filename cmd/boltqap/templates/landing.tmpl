@@ -10,6 +10,8 @@
    <input type="submit" value="Submit">
 </form>
 
+
+
 <h7>Documents created less than {{.LastEditedDays}} days ago:</h7>
 {{ range $key, $doc := .Docs }}
    <li><strong>{{ $doc }}</strong> Created: {{ $doc.Created.Format "2006 Jan 02"}} <span style="color:darkblue;">Submitted by: {{$doc.SubmittedBy}}</span> <span style="color:rgb(0, 67, 67)"> Human Name: {{$doc.HumanName}}</span></li>
@@ -17,5 +19,11 @@
 <a href="/qap/toCSV">
    <button >Download Database</button>
 </a>
+
+<form  action="/qap/createProject">
+   <h3>New Project</h3>
+   <label for="Code">New Project:</label>
+   <input type="text" name="Code" placeholder="LHC">
+</form>
 
 {{template "footer"}}
