@@ -1,0 +1,34 @@
+{{define "header"}}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>BoltQAP</title>
+    <link rel="icon" type="image/x-icon" href="/assets/img/favicon.png">
+    <!-- Polyfill for the old Edge browser -->
+    <link rel="stylesheet" href="assets/css/dark-theme.css">
+    <style>
+       {{template "style.css"}}
+    </style>
+</head>
+<body>
+    <div class="topnav">
+        <a href="/" class="active">BoltQAP</a>
+        <form action="/qap/search">
+            <input type="text" name="Query" placeholder="Search..">
+        </form>
+      </div>
+{{end}}
+
+{{define "footer"}}
+  <footer>
+    <p>
+      Copyright 2022 - go-qap
+    </p>
+    <p>
+      See source: <a href="https://github.com/soypat/go-qap">github.com/soypat/go-qap</a>. soypat/go-qap is licensed under the <strong>MIT License</strong>.
+    </p>
+  </footer>
+</body>
+</html>
+{{end}}
+

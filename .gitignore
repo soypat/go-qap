@@ -5,6 +5,10 @@
 *.so
 *.dylib
 
+# Database
+*.db
+*.bin
+
 # Test binary, built with `go test -c`
 *.test
 

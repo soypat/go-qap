@@ -1,0 +1,21 @@
+{{template "header"}}
+<form class="main" action="/qap/addDocument">
+   <h3>New Document</h3>
+   <label for="Code">Document Codes:</label>
+   <input type="text" name="Code" placeholder="SPS-HC12-HP">
+   <label for="HumanName">Human Name:</label>
+   <input type="text" id="HumanName" name="HumanName" placeholder="Thingy version 2-final-Last.docx">
+   <label for="SubmittedBy">Submitted by:</label>
+   <input type="text" id="SubmittedBy" name="SubmittedBy" placeholder="Sebastian">
+   <input type="submit" value="Submit">
+</form>
+
+<h7>Documents created less than {{.LastEditedDays}} days ago:</h7>
+{{ range $key, $doc := .Docs }}
+   <li><strong>{{ $doc }}</strong> Created: {{ $doc.Created.Format "2006 Jan 02"}} <span style="color:darkblue;">Submitted by: {{$doc.SubmittedBy}}</span> <span style="color:rgb(0, 67, 67)"> Human Name: {{$doc.HumanName}}</span></li>
+{{ end }}
+<a href="/qap/toCSV">
+   <button >Download Database</button>
+</a>
+
+{{template "footer"}}

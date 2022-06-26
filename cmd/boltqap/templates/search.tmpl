@@ -1,0 +1,25 @@
+{{template "header"}}
+
+{{if not .Headers}} 
+    <h6>No results found</h6>
+{{end}}
+
+{{if .Headers}}
+    <h7>Results for search "{{.Query}}":</h7>
+    {{ range $key, $hd := .Headers }}
+    <li><strong>{{ $hd }}</strong></li>
+    {{ end }}
+    <p>
+    {{ range $i := intRange 0 .LastPage }}
+        {{ if eq $i $.Page -}}
+        <a>{{ $i }}</a>
+        {{- end -}}
+        {{ if ne $i $.Page -}}
+        <a href="/qap/search?Query={{safe $.Query }}&Page={{ $i }}&PerPage={{ $.PerPage }}">{{ $i }}</a>
+        {{- end -}}
+    {{end}}
+    </p>
+{{end}}
+
+
+{{template "footer"}}
