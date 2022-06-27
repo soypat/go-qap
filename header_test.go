@@ -19,7 +19,7 @@ func TestParseInvalidDocumentName(t *testing.T) {
 			Input: "SPS-UPPE1-T-2.3A",
 		},
 	} {
-		h, err := ParseDocumentName(test.Input)
+		h, err := ParseHeader(test.Input, false)
 		if err == nil {
 			t.Errorf("expected %q to error", test.Input)
 		}
@@ -55,7 +55,7 @@ func TestParseDocumentName(t *testing.T) {
 			},
 		},
 	} {
-		h, err := ParseDocumentName(test.Input)
+		h, err := ParseHeader(test.Input, false)
 		if err != nil {
 			t.Error(err)
 		}
@@ -65,7 +65,7 @@ func TestParseDocumentName(t *testing.T) {
 		if h.String() != test.Input {
 			t.Errorf("expected result String() %q to be equal to input %q", h.String(), test.Input)
 		}
-		hReparse, err := ParseDocumentName(h.String())
+		hReparse, err := ParseHeader(h.String(), false)
 		if err != nil {
 			t.Errorf("reparsing %q got %q: %s", h.String(), hReparse.String(), err)
 		}
@@ -112,12 +112,12 @@ func FuzzParseDocumentName(f *testing.F) {
 	f.Add("ZZZ-PEC2C-HP-001.55")
 	f.Add("LHC-SIRP-HP-21001.00")
 	f.Fuzz(func(t *testing.T, a string) {
-		hd, err := ParseDocumentName(a)
+		hd, err := ParseHeader(a, false)
 		if err != nil {
 			return
 		}
 		hdstr := hd.String()
-		hdr, err := ParseDocumentName(hdstr)
+		hdr, err := ParseHeader(hdstr, false)
 		if err != nil {
 			t.Fatalf("Parsing valid result %q from %q errored: %s", hdstr, a, err)
 		}

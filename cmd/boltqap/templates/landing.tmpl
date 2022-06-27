@@ -7,6 +7,10 @@
    <input type="text" id="HumanName" name="HumanName" placeholder="Thingy version 2-final-Last.docx">
    <label for="SubmittedBy">Submitted by:</label>
    <input type="text" id="SubmittedBy" name="SubmittedBy" placeholder="Sebastian">
+   <label for="FileExtension">File extension:</label>
+   <input type="text" id="FileExtension" name="FileExtension" placeholder="i.e: .stl">
+   <label for="Location">Electronic repository location:</label>
+   <input type="text" id="Location" name="Location" placeholder="i.e: projects/LHC/parts/cad">
    <input type="submit" value="Submit">
 </form>
 
@@ -23,7 +27,7 @@
 <form  action="/qap/createProject">
    <h3>New Project</h3>
    <label for="Code">New Project:</label>
-   <input type="text" name="Code" placeholder="LHC">
+   <input type="text" name="Code" placeholder="i.e: LHC">
 </form>
 
 {{template "footer"}}

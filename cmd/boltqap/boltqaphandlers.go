@@ -4,6 +4,7 @@ import (
 	"bytes"
 	_ "embed"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -40,16 +41,19 @@ func (q *boltqap) handleAddDoc(rw http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now()
 	doc := document{
-		Project:     prj,
-		Equipment:   eq,
-		DocType:     dt,
-		HumanName:   form.HumanName,
-		SubmittedBy: form.SubmittedBy,
-		Created:     now,
-		Revised:     now,
+		Project:       prj,
+		Equipment:     eq,
+		DocType:       dt,
+		HumanName:     form.HumanName,
+		SubmittedBy:   form.SubmittedBy,
+		Location:      form.Location,
+		FileExtension: form.FileExtension,
+		Created:       now,
+		Revised:       now,
 	}
 	err = q.NewMainDocument(doc)
 	if err != nil {
+		log.Printf("error creating doc %#v", doc)
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -126,5 +130,56 @@ func (q *boltqap) handleToCSV(rw http.ResponseWriter, r *http.Request) {
 	_, err := io.Copy(rw, b)
 	if err != nil {
 		log.Println("in csv encoding", err)
+	}
+}
+
+func (q *boltqap) handleImportCSV(rw http.ResponseWriter, r *http.Request) {
+	c := csv.NewReader(r.Body)
+	expect := document{}.recordsHeader()
+	c.ReuseRecord = false
+	c.FieldsPerRecord = len(expect)
+	header, err := c.Read()
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+	for i := range expect {
+		if header[i] != expect[i] {
+			http.Error(rw, fmt.Sprintf("expected csv header %q, got %q", strings.Join(expect, ","), strings.Join(header, ",")), http.StatusBadRequest)
+		}
+	}
+	var documents []document
+	names := make(map[qap.Header]struct{})
+	for {
+		record, err := c.Read()
+		if err != nil {
+			break
+		}
+		doc, err := docFromRecord(record)
+		if err != nil {
+			break
+		}
+		hd, _ := doc.Header()
+		documents = append(documents, doc)
+		names[hd] = struct{}{}
+	}
+	if err != io.EOF {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+	err = q.filter.Do(func(i int, h qap.Header) error {
+		if _, present := names[h]; present {
+			return errors.New(h.String() + " already exists in database, cannot perform import")
+		}
+		return nil
+	})
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+	err = q.ImportDocuments(documents)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		return
 	}
 }

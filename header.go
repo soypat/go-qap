@@ -47,17 +47,19 @@ func (h Header) String() string {
 	return fmt.Sprintf("%s-%s-%s-%06d.%02d", h.Project(), h.Equipment(), h.DocumentType(), h.Number, h.AttachmentNumber)
 }
 
-// ParseDocumentName parses a complete QAP document string of the style
-// "SPS-PEC-HP-0023.A1". The attachment number may be omitted. This function
-// is very careful of the input and will more readily return an error
+// ParseHeader parses a complete unversioned QAP document string of the style
+// "SPS-PEC-HP-0023.A1". The attachment number parsing may be omitted by setting
+// ignoreAttachment to true setting attachment result to 0.
+//
+// This function is very careful of the input and will more readily return an error
 // before forming a valid Header from ambiguous or unexpected input.
-func ParseDocumentName(documentName string) (Header, error) {
+func ParseHeader(header string, ignoreAttachment bool) (Header, error) {
 	h := Header{}
-	if len(documentName) > maxDocumentNameLength {
+	if len(header) > maxHeaderLength {
 		// Prevent long string attack.
 		return h, errors.New("document name longer than maximum possible length")
 	}
-	splits := strings.SplitN(documentName, "-", 4)
+	splits := strings.SplitN(header, "-", 4)
 	if len(splits) < 4 {
 		return h, fmt.Errorf("expected document name to be split in 4 substrings at \"-\" characters. got %d", len(splits))
 	}
@@ -75,16 +77,20 @@ func ParseDocumentName(documentName string) (Header, error) {
 	case len(splits[2]) != lenDT:
 		return h, ErrBadDocumentTypeCode
 	}
+	var attachment uint8
 	numStr, attachStr, foundAttachment := strings.Cut(splits[3], ".")
-	if !foundAttachment {
-		return h, errors.New("did not find attachment number in document name following period")
-	}
-	attachNum, err := strconv.Atoi(attachStr)
-	if err != nil {
-		return h, errors.New("parsing attachment number: " + err.Error())
-	}
-	if attachNum < 0 || attachNum > maxAttachmentNumber {
-		return h, ErrBadAttachmentNumber
+	if !ignoreAttachment {
+		if !foundAttachment {
+			return h, errors.New("did not find attachment number in document name following period")
+		}
+		attachNum, err := strconv.Atoi(attachStr)
+		if err != nil {
+			return h, errors.New("parsing attachment number: " + err.Error())
+		}
+		if attachNum < 0 || attachNum > maxAttachmentNumber {
+			return h, ErrBadAttachmentNumber
+		}
+		attachment = uint8(attachNum)
 	}
 	num, err := strconv.Atoi(numStr)
 	if err != nil {
@@ -98,7 +104,7 @@ func ParseDocumentName(documentName string) (Header, error) {
 	copy(h.EquipmentCode[:], splits[1])
 	copy(h.DocumentTypeCode[:], splits[2])
 	h.Number = int32(num)
-	h.AttachmentNumber = uint8(attachNum)
+	h.AttachmentNumber = attachment
 	if err := h.Validate(); err != nil {
 		return Header{}, err
 	}

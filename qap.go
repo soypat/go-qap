@@ -9,12 +9,13 @@ import (
 const (
 	maxDocumentNumber   = 999_999
 	maxAttachmentNumber = 99
+	lenP                = len(Header{}.ProjectCode)
+	lenE                = len(Header{}.EquipmentCode)
+	lenDT               = len(Header{}.DocumentTypeCode)
 	// Maximum length of a document name string including code separators.
-	maxDocumentNameLength = lenP + lenE + lenDT + 6 + 2 + 4
-	lenP                  = len(Header{}.ProjectCode)
-	lenE                  = len(Header{}.EquipmentCode)
-	lenDT                 = len(Header{}.DocumentTypeCode)
-	lenHeader             = 4 + lenP + lenE + lenDT + 1
+	maxHeaderLength = lenP + lenE + lenDT + 6 + 2 + 4
+
+	lenHeader = 4 + lenP + lenE + lenDT + 1
 )
 
 var (
@@ -34,7 +35,7 @@ var (
 // ParseDocumentCodes is a helper function to extract document codes from
 // human input.
 func ParseDocumentCodes(documentName string) (project, equipment, docType string) {
-	const safeLen = maxDocumentNameLength + 5
+	const safeLen = maxHeaderLength + 5
 	if len(documentName) > safeLen {
 		documentName = documentName[:safeLen]
 	}

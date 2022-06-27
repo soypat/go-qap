@@ -13,9 +13,10 @@ import (
 	"go.etcd.io/bbolt"
 )
 
+const timeKeyFormat = "2006-01-02 15:04:05.999"
+
 func boltKey(t time.Time) []byte {
 	// RFC3339 format allows for sortable keys. See https://github.com/etcd-io/bbolt#range-scans.
-	const timeKeyFormat = "2006-01-02T15:04:05Z"
 	return []byte(t.Format(timeKeyFormat))
 }
 
@@ -44,28 +45,42 @@ func (q *boltqap) CreateProject(projectName string) error {
 }
 
 func (q *boltqap) NewMainDocument(doc document) error {
-	if doc.SubmittedBy == "" {
-		return errors.New("empty submitter")
-	} else if doc.HumanName == "" {
-		return errors.New("empty human name")
+	if doc.Version == "" {
+		doc.Version = qap.NewRevision().String()
 	}
-	if time.Since(doc.Created) > 24*time.Hour {
+	switch {
+	case doc.SubmittedBy == "":
+		return errors.New("empty submitter")
+	case doc.HumanName == "":
+		return errors.New("empty human name")
+	case doc.FileExtension == "":
+		return errors.New("empty file extension")
+	case doc.Location == "":
+		return errors.New("empty location")
+	case time.Since(doc.Created) > 24*time.Hour:
 		return errors.New("document created too long ago")
 	}
-	doc.Number = 1 // Number assigned by system.
+	doc.Revised = time.Now()
+	doc.Number = 1 // Actual number assigned below.
 	header, err := doc.Header()
 	if err != nil {
-		return errors.New("document invalidly formatted: " + err.Error())
+		return errors.New("document header invalidly formatted: " + err.Error())
 	}
-	var equalCode int
+	_, err = doc.Revision()
+	if err != nil {
+		return errors.New("document revision invalidly formatted: " + err.Error())
+	}
+	var maxCode int32
 	q.filter.Do(func(i int, h qap.Header) error {
 		if qap.HeaderCodesEqual(h, header) {
-			equalCode++
+			if h.Number > maxCode {
+				maxCode = h.Number
+			}
 		}
 		return nil
 	})
-	doc.Number = 1 + equalCode
-	header.Number = int32(doc.Number)
+	doc.Number = int(maxCode) + 1
+	header.Number = maxCode + 1
 	err = q.filter.AddHeader(header)
 	if err != nil {
 		return errors.New("unexpected error attempting to add document: " + err.Error())
@@ -141,4 +156,37 @@ func (q *boltqap) DoDocumentsRange(startTime, endTime time.Time, f func(d docume
 			return nil
 		})
 	})
+}
+
+func (q *boltqap) ImportDocuments(documents []document) (err error) {
+	for _, doc := range documents {
+		_, err := doc.Info()
+		if err != nil {
+			return err
+		}
+	}
+	tx, err := q.db.Begin(true)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	err = q.importDocuments(tx, documents)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (q *boltqap) importDocuments(tx *bbolt.Tx, documents []document) error {
+	for _, doc := range documents {
+		bucket := tx.Bucket([]byte(doc.Project))
+		if bucket == nil {
+			return errors.New(doc.Project + "project not found")
+		}
+		err := bucket.Put(doc.key(), doc.value())
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
