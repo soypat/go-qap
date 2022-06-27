@@ -85,9 +85,7 @@ func (d Revision) Validate() error {
 	if d.Index == (Revision{}).Index {
 		return errors.New("revision not initialized")
 	}
-	alphaNum1 := isAlphaNum(d.Index[1])
-	if !alphaNum1 || isAlphaNum(d.Index[1]) && !isAlphaNum(d.Index[0]) ||
-		!isNum(d.Index[0]) {
+	if !isAlpha(d.Index[0]) || !isNum(d.Index[1]) {
 		return ErrBadRevisionIndex
 	}
 	if d.Index == [2]byte{'A', '0'} {

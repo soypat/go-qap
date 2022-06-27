@@ -8,33 +8,21 @@ func TestParseRevision(t *testing.T) {
 		Expect Revision
 	}{
 		{
-			Input: "9.Z-draft",
+			Input: "Z.9-draft",
 			Expect: Revision{
-				Index: [2]byte{'9', 'Z'},
+				Index: [2]byte{'Z', '9'},
 			},
 		},
 		{
-			Input: "0.1-draft",
+			Input: "A.1-draft",
 			Expect: Revision{
-				Index: [2]byte{'0', '1'},
+				Index: [2]byte{'A', '1'},
 			},
 		},
 		{
-			Input: "3.0",
+			Input: "B.9",
 			Expect: Revision{
-				Index: [2]byte{'3', '0'}, IsRelease: true,
-			},
-		},
-		{
-			Input: "9.A",
-			Expect: Revision{
-				Index: [2]byte{'9', 'A'}, IsRelease: true,
-			},
-		},
-		{
-			Input: "0.A",
-			Expect: Revision{
-				Index: [2]byte{'0', 'A'}, IsRelease: true,
+				Index: [2]byte{'B', '9'}, IsRelease: true,
 			},
 		},
 	} {

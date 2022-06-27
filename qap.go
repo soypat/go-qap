@@ -50,10 +50,3 @@ func ParseDocumentCodes(documentName string) (project, equipment, docType string
 	}
 	return project, equipment, docType
 }
-
-// ErrorIsEmptyCode returns true if argument error is a result of an empty
-// Header code. For use with ParseDocumentCodes for human query generation.
-func ErrorIsEmptyCode(err error) bool {
-	return errors.Is(err, ErrEmptyProjectCode) || errors.Is(err, ErrEmptyEquipmentCode) ||
-		errors.Is(err, ErrEmptyDocumentTypeCode)
-}
