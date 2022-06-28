@@ -59,6 +59,9 @@ func (hf *HeaderFilter) Len() int { return len(hf.data) }
 
 // AddHeader adds a header to the filter.
 func (hf *HeaderFilter) AddHeader(h Header) error {
+	if err := h.Validate(); err != nil {
+		return err
+	}
 	if hf.Has(h) {
 		return errors.New("header already present")
 	}

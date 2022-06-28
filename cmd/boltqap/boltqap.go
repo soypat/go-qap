@@ -177,7 +177,15 @@ func (q *boltqap) ImportDocuments(documents []document) (err error) {
 	if err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	for _, doc := range documents {
+		// Documents are guaranteed to be valid by this point.
+		hd, _ := doc.Header()
+		q.filter.AddHeader(hd)
+	}
+	return nil
 }
 
 func (q *boltqap) importDocuments(tx *bbolt.Tx, documents []document) error {

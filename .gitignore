@@ -4,6 +4,7 @@
 *.dll
 *.so
 *.dylib
+cmd/boltqap/boltqap
 
 # Database
 *.db
