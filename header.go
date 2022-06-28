@@ -96,7 +96,7 @@ func ParseHeader(header string, ignoreAttachment bool) (Header, error) {
 	if err != nil {
 		return h, errors.New("parsing document name number: " + err.Error())
 	}
-	if num < 1 || num > maxDocumentNumber {
+	if num < minDocumentNumber || num > maxDocumentNumber {
 		return h, ErrInvalidNumber
 	}
 
@@ -151,7 +151,7 @@ func (h Header) Validate() (err error) {
 		err = ErrBadEquipmentCode
 	case !reUpper.Match(doctype):
 		err = ErrBadDocumentTypeCode
-	case h.Number < 1 || h.Number > maxDocumentNumber:
+	case h.Number < minDocumentNumber || h.Number > maxDocumentNumber:
 		err = ErrInvalidNumber
 	case len(proj) == 0:
 		err = ErrEmptyProjectCode
@@ -159,7 +159,6 @@ func (h Header) Validate() (err error) {
 		err = ErrEmptyEquipmentCode
 	case len(doctype) == 0:
 		err = ErrEmptyDocumentTypeCode
-
 	}
 	if err != nil {
 		return err

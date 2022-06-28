@@ -53,7 +53,7 @@ func (d document) records() []string {
 		d.Location,
 	}
 }
-func docFromRecord(record []string) (document, error) {
+func docFromRecord(record []string, ignoreTime bool) (document, error) {
 	if len(record) < len(document{}.recordsHeader()) {
 		return document{}, errors.New("not enough record fields to parse document")
 	}
@@ -64,13 +64,16 @@ func docFromRecord(record []string) (document, error) {
 	if err != nil {
 		return document{}, errors.New("parsing document name" + record[0] + " from record: " + err.Error())
 	}
-	created, err := time.Parse(timeKeyFormat, record[4])
-	if err != nil {
-		return document{}, errors.New("parsing doc record creation field: " + err.Error())
-	}
-	revised, err := time.Parse(timeKeyFormat, record[5])
-	if err != nil {
-		return document{}, errors.New("parsing doc record creation field: " + err.Error())
+	var created, revised time.Time
+	if !ignoreTime {
+		created, err = time.Parse(timeKeyFormat, record[4])
+		if err != nil {
+			return document{}, errors.New("parsing doc record creation field: " + err.Error())
+		}
+		revised, err = time.Parse(timeKeyFormat, record[5])
+		if err != nil {
+			return document{}, errors.New("parsing doc record creation field: " + err.Error())
+		}
 	}
 	d := document{
 		Project:       rec.Project(),
@@ -149,6 +152,22 @@ func (d document) value() []byte {
 		panic("unreachable")
 	}
 	return b
+}
+
+func haveConflictingKeys(documents []document) bool {
+	keys := make(map[[len(timeKeyFormat)]byte]struct{}, len(documents))
+	var key [len(timeKeyFormat)]byte
+	for _, doc := range documents {
+		n := copy(key[:], doc.key())
+		if n != len(timeKeyFormat) {
+			panic("unreachable")
+		}
+		if _, exist := keys[key]; exist {
+			return true
+		}
+		keys[key] = struct{}{}
+	}
+	return false
 }
 
 type newDocForm struct {

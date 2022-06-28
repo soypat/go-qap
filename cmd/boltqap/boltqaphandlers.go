@@ -134,7 +134,23 @@ func (q *boltqap) handleToCSV(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (q *boltqap) handleImportCSV(rw http.ResponseWriter, r *http.Request) {
-	c := csv.NewReader(r.Body)
+	const megabyte = 1000 * 1000
+	err := r.ParseMultipartForm(12 * megabyte)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	files := r.MultipartForm.File["ImportCSV"]
+	if len(files) != 1 {
+		http.Error(rw, "ImportCSV file not found or too many files", http.StatusBadRequest)
+		return
+	}
+	f, err := files[0].Open()
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	c := csv.NewReader(f)
 	expect := document{}.recordsHeader()
 	c.ReuseRecord = false
 	c.FieldsPerRecord = len(expect)
@@ -150,21 +166,36 @@ func (q *boltqap) handleImportCSV(rw http.ResponseWriter, r *http.Request) {
 	}
 	var documents []document
 	names := make(map[qap.Header]struct{})
+	now := time.Now()
 	for {
-		record, err := c.Read()
-		if err != nil {
+		record, err1 := c.Read()
+		if err1 != nil {
+			err = err1
 			break
 		}
-		doc, err := docFromRecord(record)
-		if err != nil {
+		fmt.Println(record)
+		doc, err1 := docFromRecord(record, false)
+		if err1 != nil {
+			doc, err1 = docFromRecord(record, true)
+			doc.Created = now
+			doc.Revised = now
+			now = now.Add(time.Millisecond)
+		}
+		if err1 != nil {
+			err = err1
 			break
 		}
+		fmt.Println(record, err)
 		hd, _ := doc.Header()
 		documents = append(documents, doc)
 		names[hd] = struct{}{}
 	}
-	if err != io.EOF {
+	if err != io.EOF && err != nil {
 		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if haveConflictingKeys(documents) {
+		http.Error(rw, "documents have conflicting time of creation", http.StatusBadRequest)
 		return
 	}
 	err = q.filter.Do(func(i int, h qap.Header) error {
@@ -182,4 +213,5 @@ func (q *boltqap) handleImportCSV(rw http.ResponseWriter, r *http.Request) {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	fmt.Fprintf(rw, "success writing %d documents to database", len(documents))
 }

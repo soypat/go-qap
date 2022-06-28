@@ -27,7 +27,7 @@ func TestDocumentRecords(t *testing.T) {
 	if _, err := d.Info(); err != nil {
 		t.Fatal("test is incorrect:", err)
 	}
-	dpiped, err := docFromRecord(d.records())
+	dpiped, err := docFromRecord(d.records(), false)
 	if err != nil {
 		t.Fatal(err)
 	}

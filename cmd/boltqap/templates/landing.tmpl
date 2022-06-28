@@ -24,10 +24,16 @@
    <button >Download Database</button>
 </a>
 
-<form  action="/qap/createProject">
+<form class="main" action="/qap/createProject">
    <h3>New Project</h3>
    <label for="Code">New Project:</label>
    <input type="text" name="Code" placeholder="i.e: LHC">
 </form>
 
+<form class="main" method="post" enctype="multipart/form-data" action="/qap/importCSV">
+   <p>
+      <label>Import raw CSV data from file: </label><br/>
+      <input type="file" name="ImportCSV"/><input type="submit"/>
+  </p>
+</form>
 {{template "footer"}}

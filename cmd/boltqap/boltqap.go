@@ -13,11 +13,14 @@ import (
 	"go.etcd.io/bbolt"
 )
 
-const timeKeyFormat = "2006-01-02 15:04:05.999"
+const timeKeyFormat = "2006-01-02 15:04:05.9999"
 
 func boltKey(t time.Time) []byte {
+	padding := [4]byte{'0', '0', '0', '0'}
 	// RFC3339 format allows for sortable keys. See https://github.com/etcd-io/bbolt#range-scans.
-	return []byte(t.Format(timeKeyFormat))
+	key := []byte(t.Format(timeKeyFormat))
+	key = append(key, padding[:len(timeKeyFormat)-len(key)]...)
+	return key
 }
 
 type boltqap struct {
@@ -183,7 +186,12 @@ func (q *boltqap) importDocuments(tx *bbolt.Tx, documents []document) error {
 		if bucket == nil {
 			return errors.New(doc.Project + "project not found")
 		}
-		err := bucket.Put(doc.key(), doc.value())
+		key := doc.key()
+		existing := bucket.Get(key)
+		if existing != nil {
+			return fmt.Errorf("imported document %q cannot have same creation time as existing document", doc.String())
+		}
+		err := bucket.Put(key, doc.value())
 		if err != nil {
 			return err
 		}

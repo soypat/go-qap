@@ -7,6 +7,7 @@ import (
 )
 
 const (
+	minDocumentNumber   = 0
 	maxDocumentNumber   = 999_999
 	maxAttachmentNumber = 99
 	lenP                = len(Header{}.ProjectCode)
@@ -19,7 +20,7 @@ const (
 )
 
 var (
-	ErrInvalidNumber         = fmt.Errorf("QAP number out of range 1..%d", maxDocumentNumber)
+	ErrInvalidNumber         = fmt.Errorf("QAP number out of range 0..%d", maxDocumentNumber)
 	ErrEmptyProjectCode      = errors.New("zero length project code")
 	ErrEmptyEquipmentCode    = errors.New("zero length equipment code")
 	ErrEmptyDocumentTypeCode = errors.New("zero length document type code")
