@@ -1,7 +1,6 @@
 package qap
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -66,10 +65,8 @@ func (d DocInfo) Validate() error {
 	if err := d.Revision.Validate(); err != nil {
 		return err
 	}
-	if d.Creation == (time.Time{}) {
-		return errors.New("got zero value for time of creation")
-	} else if d.RevisionTime == (time.Time{}) {
-		return errors.New("got zero value for time of revision")
+	if d.Creation == (time.Time{}) || d.RevisionTime == (time.Time{}) {
+		return ErrZeroTime
 	}
 	return nil
 }

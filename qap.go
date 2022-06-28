@@ -30,6 +30,7 @@ var (
 	ErrBadDocumentTypeCode   = fmt.Errorf("document type code must be 1..%d upper case characters", lenDT)
 	ErrBadAttachmentNumber   = fmt.Errorf("attachment number must be 2 digits in range 0..%d", maxAttachmentNumber)
 
+	ErrZeroTime         = errors.New("creation/revision time is zero")
 	ErrBadRevisionIndex = errors.New("revision index must be two digits or an upper case character followed by a digit")
 )
 

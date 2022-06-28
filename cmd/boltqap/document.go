@@ -90,7 +90,7 @@ func docFromRecord(record []string, ignoreTime bool) (document, error) {
 		Location:      record[7],
 	}
 	_, err = d.Info()
-	if err != nil {
+	if err != nil && !(errors.Is(err, qap.ErrZeroTime) && ignoreTime) {
 		return document{}, err
 	}
 	return d, nil
