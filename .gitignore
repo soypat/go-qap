@@ -6,6 +6,9 @@
 *.dylib
 cmd/boltqap/boltqap
 
+# No need for shell scripts afaik
+*.sh
+
 # Database
 *.db
 *.bin

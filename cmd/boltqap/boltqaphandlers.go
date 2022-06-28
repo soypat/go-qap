@@ -211,10 +211,5 @@ func (q *boltqap) handleImportCSV(rw http.ResponseWriter, r *http.Request) {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	for _, doc := range documents {
-		// Documents are guaranteed to be valid by this point.
-		hd, _ := doc.Header()
-		q.filter.AddHeader(hd)
-	}
 	fmt.Fprintf(rw, "success writing %d documents to database", len(documents))
 }
