@@ -82,7 +82,7 @@ func (hf *HeaderFilter) HumanQuery(dst []Header, query string, page int) (n, tot
 	if page < 0 {
 		panic("page must be 0 or greater")
 	}
-	header, err := ParseDocumentName(query)
+	header, err := ParseHeader(query, false)
 	if err == nil && hf.Has(header) {
 		if len(dst) > 0 {
 			dst[0] = header

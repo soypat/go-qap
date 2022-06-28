@@ -4,6 +4,7 @@ import (
 	"bytes"
 	_ "embed"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -40,16 +41,19 @@ func (q *boltqap) handleAddDoc(rw http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now()
 	doc := document{
-		Project:     prj,
-		Equipment:   eq,
-		DocType:     dt,
-		HumanName:   form.HumanName,
-		SubmittedBy: form.SubmittedBy,
-		Created:     now,
-		Revised:     now,
+		Project:       prj,
+		Equipment:     eq,
+		DocType:       dt,
+		HumanName:     form.HumanName,
+		SubmittedBy:   form.SubmittedBy,
+		Location:      form.Location,
+		FileExtension: form.FileExtension,
+		Created:       now,
+		Revised:       now,
 	}
 	err = q.NewMainDocument(doc)
 	if err != nil {
+		log.Printf("error creating doc %#v", doc)
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -127,4 +131,87 @@ func (q *boltqap) handleToCSV(rw http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Println("in csv encoding", err)
 	}
+}
+
+func (q *boltqap) handleImportCSV(rw http.ResponseWriter, r *http.Request) {
+	const megabyte = 1000 * 1000
+	err := r.ParseMultipartForm(12 * megabyte)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	files := r.MultipartForm.File["ImportCSV"]
+	if len(files) != 1 {
+		http.Error(rw, "ImportCSV file not found or too many files", http.StatusBadRequest)
+		return
+	}
+	f, err := files[0].Open()
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	c := csv.NewReader(f)
+	expect := document{}.recordsHeader()
+	c.ReuseRecord = false
+	c.FieldsPerRecord = len(expect)
+	header, err := c.Read()
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+	for i := range expect {
+		if header[i] != expect[i] {
+			http.Error(rw, fmt.Sprintf("expected csv header %q, got %q", strings.Join(expect, ","), strings.Join(header, ",")), http.StatusBadRequest)
+		}
+	}
+	var documents []document
+	names := make(map[qap.Header]struct{})
+	now := time.Now()
+	for {
+		record, err1 := c.Read()
+		if err1 != nil {
+			err = err1
+			break
+		}
+		fmt.Println(record)
+		doc, err1 := docFromRecord(record, false)
+		if err1 != nil {
+			doc, err1 = docFromRecord(record, true)
+			doc.Created = now
+			doc.Revised = now
+			now = now.Add(time.Millisecond)
+		}
+		if err1 != nil {
+			err = err1
+			break
+		}
+		fmt.Println(record, err)
+		hd, _ := doc.Header()
+		documents = append(documents, doc)
+		names[hd] = struct{}{}
+	}
+	if err != io.EOF && err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if haveConflictingKeys(documents) {
+		http.Error(rw, "documents have conflicting time of creation", http.StatusBadRequest)
+		return
+	}
+	err = q.filter.Do(func(i int, h qap.Header) error {
+		if _, present := names[h]; present {
+			return errors.New(h.String() + " already exists in database, cannot perform import")
+		}
+		return nil
+	})
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+	err = q.ImportDocuments(documents)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	fmt.Fprintf(rw, "success writing %d documents to database", len(documents))
 }

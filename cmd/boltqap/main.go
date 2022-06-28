@@ -70,6 +70,7 @@ func run() error {
 	sv.HandleFunc("/qap/addDocument", db.handleAddDoc)
 	sv.HandleFunc("/qap/createProject", db.handleCreateProject)
 	sv.HandleFunc("/qap/toCSV", db.handleToCSV)
+	sv.HandleFunc("/qap/importCSV", db.handleImportCSV)
 	return http.ListenAndServe(":8081", sv)
 }
 
