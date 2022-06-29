@@ -162,20 +162,29 @@ func (d document) value() []byte {
 	return b
 }
 
-func haveConflictingKeys(documents []document) bool {
+func checkConflicts(documents []document) error {
+	names := make(map[qap.Header]struct{})
 	keys := make(map[[len(timeKeyFormat)]byte]struct{}, len(documents))
 	var key [len(timeKeyFormat)]byte
 	for _, doc := range documents {
 		n := copy(key[:], doc.key())
 		if n != len(timeKeyFormat) {
-			panic("unreachable")
+			return errors.New("unexpected error in database key format")
 		}
 		if _, exist := keys[key]; exist {
-			return true
+			return errors.New("conflicting key " + string(key[:]))
+		}
+		hd, err := doc.Header()
+		if err != nil {
+			return err
+		}
+		if _, exist := names[hd]; exist {
+			return fmt.Errorf("conflicting header %s", hd.String())
 		}
 		keys[key] = struct{}{}
+		names[hd] = struct{}{}
 	}
-	return false
+	return nil
 }
 
 type newDocForm struct {

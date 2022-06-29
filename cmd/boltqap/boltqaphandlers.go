@@ -4,7 +4,6 @@ import (
 	"bytes"
 	_ "embed"
 	"encoding/csv"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -36,7 +35,6 @@ func (q *boltqap) handleGetDocument(rw http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Println("error in document template: ", err)
 	}
-
 }
 
 func (q *boltqap) handleCreateProject(rw http.ResponseWriter, r *http.Request) {
@@ -73,13 +71,14 @@ func (q *boltqap) handleAddDoc(rw http.ResponseWriter, r *http.Request) {
 		Created:       now,
 		Revised:       now,
 	}
-	err = q.NewMainDocument(doc)
+	newdoc, err := q.NewMainDocument(doc)
 	if err != nil {
 		log.Printf("error creating doc %#v", doc)
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	fmt.Fprintf(rw, "added %s", strings.Join([]string{prj, eq, dt}, "-"))
+	log.Printf("added %s", strings.Join([]string{prj, eq, dt}, "-"))
+	http.Redirect(rw, r, "/qap/doc/"+newdoc.String(), http.StatusTemporaryRedirect)
 }
 
 func (q *boltqap) handleSearch(rw http.ResponseWriter, r *http.Request) {
@@ -187,7 +186,6 @@ func (q *boltqap) handleImportCSV(rw http.ResponseWriter, r *http.Request) {
 		}
 	}
 	var documents []document
-	names := make(map[qap.Header]struct{})
 	now := time.Now()
 	for {
 		record, err1 := c.Read()
@@ -206,25 +204,9 @@ func (q *boltqap) handleImportCSV(rw http.ResponseWriter, r *http.Request) {
 			err = err1
 			break
 		}
-		hd, _ := doc.Header()
 		documents = append(documents, doc)
-		names[hd] = struct{}{}
 	}
 	if err != io.EOF && err != nil {
-		http.Error(rw, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if haveConflictingKeys(documents) {
-		http.Error(rw, "documents have conflicting time of creation", http.StatusBadRequest)
-		return
-	}
-	err = q.filter.Do(func(i int, h qap.Header) error {
-		if _, present := names[h]; present {
-			return errors.New(h.String() + " already exists in database, cannot perform import")
-		}
-		return nil
-	})
-	if err != nil {
 		http.Error(rw, err.Error(), http.StatusBadRequest)
 		return
 	}

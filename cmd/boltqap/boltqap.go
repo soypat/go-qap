@@ -55,31 +55,31 @@ func (q *boltqap) CreateProject(projectName string) error {
 	return nil
 }
 
-func (q *boltqap) NewMainDocument(doc document) error {
+func (q *boltqap) NewMainDocument(doc document) (newdoc document, err error) {
 	if doc.Version == "" {
 		doc.Version = qap.NewRevision().String()
 	}
 	switch {
 	case doc.SubmittedBy == "":
-		return errors.New("empty submitter")
+		return document{}, errors.New("empty submitter")
 	case doc.HumanName == "":
-		return errors.New("empty human name")
+		return document{}, errors.New("empty human name")
 	case doc.FileExtension == "":
-		return errors.New("empty file extension")
+		return document{}, errors.New("empty file extension")
 	case doc.Location == "":
-		return errors.New("empty location")
+		return document{}, errors.New("empty location")
 	case time.Since(doc.Created) > 24*time.Hour:
-		return errors.New("document created too long ago")
+		return document{}, errors.New("document created too long ago")
 	}
 	doc.Revised = time.Now()
 	doc.Number = 1 // Actual number assigned below.
 	header, err := doc.Header()
 	if err != nil {
-		return errors.New("document header invalidly formatted: " + err.Error())
+		return document{}, errors.New("document header invalidly formatted: " + err.Error())
 	}
 	_, err = doc.Revision()
 	if err != nil {
-		return errors.New("document revision invalidly formatted: " + err.Error())
+		return document{}, errors.New("document revision invalidly formatted: " + err.Error())
 	}
 	var maxCode int32
 	q.filter.Do(func(i int, h qap.Header) error {
@@ -94,7 +94,7 @@ func (q *boltqap) NewMainDocument(doc document) error {
 	header.Number = maxCode + 1
 	err = q.filter.AddHeader(header)
 	if err != nil {
-		return errors.New("unexpected error attempting to add document: " + err.Error())
+		return newdoc, errors.New("unexpected error attempting to add document: " + err.Error())
 	}
 	err = q.db.Update(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte(header.Project()))
@@ -113,9 +113,9 @@ func (q *boltqap) NewMainDocument(doc document) error {
 		return nil
 	})
 	if err != nil {
-		return err
+		return document{}, err
 	}
-	return nil
+	return doc, nil
 }
 
 func (q *boltqap) DoDocuments(f func(d document) error) error {
@@ -137,18 +137,19 @@ func (q *boltqap) DoDocumentsRange(startTime, endTime time.Time, f func(d docume
 	incrementing := startTime.Before(endTime)
 	start := boltKey(startTime)
 	end := boltKey(endTime)
+	var getIterator func(*bbolt.Cursor) func() (k, v []byte)
+	var cmp func(a, b []byte) bool
+	if incrementing {
+		getIterator = func(c *bbolt.Cursor) func() (k, v []byte) { return c.Next }
+		cmp = func(a, b []byte) bool { return bytes.Compare(a, b) <= 0 }
+	} else {
+		getIterator = func(c *bbolt.Cursor) func() (k, v []byte) { return c.Prev }
+		cmp = func(a, b []byte) bool { return bytes.Compare(a, b) >= 0 }
+	}
 	return q.db.View(func(tx *bbolt.Tx) error {
 		return tx.ForEach(func(name []byte, b *bbolt.Bucket) error {
 			c := b.Cursor()
-			var next func() (k, v []byte)
-			var cmp func(a, b []byte) bool
-			if incrementing {
-				next = c.Next
-				cmp = func(a, b []byte) bool { return bytes.Compare(a, b) <= 0 }
-			} else {
-				cmp = func(a, b []byte) bool { return bytes.Compare(a, b) >= 0 }
-				next = c.Prev
-			}
+			next := getIterator(c)
 			k, v := c.Seek(start)
 			if k == nil {
 				k, v = next()
@@ -170,10 +171,16 @@ func (q *boltqap) DoDocumentsRange(startTime, endTime time.Time, f func(d docume
 }
 
 func (q *boltqap) ImportDocuments(documents []document) (err error) {
+	if err := checkConflicts(documents); err != nil {
+		return errors.New("conflicting time of creation in imported documents: " + err.Error())
+	}
 	for _, doc := range documents {
-		_, err := doc.Info()
+		info, err := doc.Info()
 		if err != nil {
 			return err
+		}
+		if q.filter.Has(info.Header) {
+			return fmt.Errorf("%s already exists", info.Header)
 		}
 	}
 	tx, err := q.db.Begin(true)
