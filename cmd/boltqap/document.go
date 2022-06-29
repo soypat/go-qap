@@ -138,6 +138,14 @@ func docFromValue(b []byte) (d document, err error) {
 	return d, err
 }
 
+func (d document) URL() string {
+	hd, err := d.Header()
+	if err != nil {
+		return "/qap/doc/invalid"
+	}
+	return "/qap/doc/" + hd.String()
+}
+
 func (d document) CodeQuery() string {
 	return strings.Join([]string{d.Project, d.Equipment, d.DocType}, "-")
 }

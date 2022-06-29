@@ -214,3 +214,34 @@ func (q *boltqap) importDocuments(tx *bbolt.Tx, documents []document) error {
 	}
 	return nil
 }
+
+func (q *boltqap) GetDocument(hd qap.Header) (document, error) {
+	thedoc := document{}
+	gotDoc := errors.New("got the document")
+	err := q.db.View(func(tx *bbolt.Tx) error {
+		buck := tx.Bucket([]byte(hd.Project()))
+		if buck == nil {
+			return errors.New("project not exist:" + hd.Project())
+		}
+		return buck.ForEach(func(k, v []byte) error {
+			doc, err := docFromValue(v)
+			if err != nil {
+				log.Println("error reading document from database: ", err.Error())
+				return nil
+			}
+			hdgot, err := doc.Header()
+			if qap.HeadersEqual(hd, hdgot) {
+				thedoc = doc
+				return gotDoc
+			}
+			return nil
+		})
+	})
+	if err == nil {
+		return thedoc, errors.New("did not find document" + hd.String())
+	}
+	if !errors.Is(err, gotDoc) {
+		return thedoc, err
+	}
+	return thedoc, nil
+}

@@ -7,7 +7,7 @@
 {{if .Headers}}
     <h7>Results for search "{{.Query}}":</h7>
     {{ range $key, $hd := .Headers }}
-    <li><strong>{{ $hd }}</strong></li>
+    <li><strong><a href="{{headerURL $hd}}">{{ $hd }}</a></strong></li>
     {{ end }}
     <p>
     {{ range $i := intRange 0 .LastPage }}

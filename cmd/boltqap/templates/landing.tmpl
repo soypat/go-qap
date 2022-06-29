@@ -18,7 +18,7 @@
 
 <h7>Documents created less than {{.LastEditedDays}} days ago:</h7>
 {{ range $key, $doc := .Docs }}
-   <li><strong>{{ $doc }}</strong> Created: {{ $doc.Created.Format "2006 Jan 02 15:04"}} <span style="color:darkblue;">Submitted by: {{$doc.SubmittedBy}}</span> <span style="color:rgb(0, 67, 67)"> Human Name: {{$doc.HumanName}}</span></li>
+   <li><strong><a href="{{$doc.URL}}">{{ $doc }}</a>></strong> Created: {{ $doc.Created.Format "2006 Jan 02 15:04"}} <span style="color:darkblue;">Submitted by: {{$doc.SubmittedBy}}</span> <span style="color:rgb(0, 67, 67)"> Human Name: {{$doc.HumanName}}</span></li>
 {{ end }}
 <a href="/qap/toCSV">
    <button >Download Database</button>

@@ -48,7 +48,7 @@ func (h Header) String() string {
 }
 
 // ParseHeader parses a complete unversioned QAP document string of the style
-// "SPS-PEC-HP-0023.A1". The attachment number parsing may be omitted by setting
+// "SPS-PEC-HP-0023.01". The attachment number parsing may be omitted by setting
 // ignoreAttachment to true setting attachment result to 0.
 //
 // This function is very careful of the input and will more readily return an error

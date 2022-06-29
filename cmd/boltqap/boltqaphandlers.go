@@ -10,12 +10,34 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/soypat/go-qap"
 )
+
+func (q *boltqap) handleGetDocument(rw http.ResponseWriter, r *http.Request) {
+	upath := r.URL.Path[1:]
+	fpath := path.Base(upath)
+	hd, err := qap.ParseHeader(fpath, true)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
+	log.Println("get document", hd.String())
+	doc, err := q.GetDocument(hd)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	err = q.tmpl.Lookup("document.tmpl").Execute(rw, doc)
+	if err != nil {
+		log.Println("error in document template: ", err)
+	}
+
+}
 
 func (q *boltqap) handleCreateProject(rw http.ResponseWriter, r *http.Request) {
 	project := r.URL.Query().Get("Code")
