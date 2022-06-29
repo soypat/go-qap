@@ -16,11 +16,19 @@ import (
 const timeKeyFormat = "2006-01-02 15:04:05.9999"
 
 func boltKey(t time.Time) []byte {
-	padding := [4]byte{'0', '0', '0', '0'}
+	padding := [5]byte{'.', '0', '0', '0', '0'}
 	// RFC3339 format allows for sortable keys. See https://github.com/etcd-io/bbolt#range-scans.
 	key := []byte(t.Format(timeKeyFormat))
-	key = append(key, padding[:len(timeKeyFormat)-len(key)]...)
+	diff := len(timeKeyFormat) - len(key)
+	key = append(key, padding[len(padding)-diff:]...)
 	return key
+}
+
+func abs(a int) int {
+	if a < 0 {
+		return -a
+	}
+	return a
 }
 
 type boltqap struct {
