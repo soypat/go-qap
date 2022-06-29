@@ -71,6 +71,7 @@ func run() error {
 	sv.HandleFunc("/qap/createProject", db.handleCreateProject)
 	sv.HandleFunc("/qap/toCSV", db.handleToCSV)
 	sv.HandleFunc("/qap/importCSV", db.handleImportCSV)
+	sv.HandleFunc("/qap/doc/", db.handleGetDocument)
 	return http.ListenAndServe(":8081", sv)
 }
 
@@ -94,5 +95,8 @@ var funcs = template.FuncMap{
 			return template.HTML(v)
 		}
 		return "type error"
+	},
+	"headerURL": func(hd qap.Header) string {
+		return "/qap/doc/" + hd.String()
 	},
 }

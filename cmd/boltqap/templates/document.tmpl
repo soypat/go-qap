@@ -1,0 +1,10 @@
+{{template "header"}}
+<h2>{{.HumanName}} - {{.String}}</h2>
+<p>Submitted by <strong>{{.SubmittedBy}}</strong></p>
+<p>File extension: {{.FileExtension}}</p>
+<p>Location: {{.Location}}</p>
+<p>Version: {{.Version}}</p>
+<p>Created: {{.Created.Format "2006 Jan 02 15:04:05"}}</p>
+<p>Revised: {{.Revised.Format "2006 Jan 02 15:04:05"}}</p>
+<p>Deleted: {{.Deleted}}</p>
+{{template "footer"}}
