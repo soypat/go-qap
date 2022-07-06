@@ -172,7 +172,7 @@ func (q *boltqap) DoDocumentsRange(startTime, endTime time.Time, f func(d docume
 
 func (q *boltqap) ImportDocuments(documents []document) (err error) {
 	if err := checkConflicts(documents); err != nil {
-		return errors.New("conflicting time of creation in imported documents: " + err.Error())
+		return errors.New("error checking document conflicts during import: " + err.Error())
 	}
 	for _, doc := range documents {
 		info, err := doc.Info()

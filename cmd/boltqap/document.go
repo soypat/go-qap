@@ -12,6 +12,11 @@ import (
 	"github.com/soypat/go-qap"
 )
 
+type revision struct {
+	Index       string
+	Description string
+}
+
 type document struct {
 	Project       string
 	Equipment     string
@@ -22,6 +27,7 @@ type document struct {
 	HumanName     string
 	FileExtension string
 	Location      string
+	Revisions     []revision
 	Version       string
 	Created       time.Time
 	Revised       time.Time
@@ -53,6 +59,7 @@ func (d document) records() []string {
 		d.Location,
 	}
 }
+
 func docFromRecord(record []string, ignoreTime bool) (document, error) {
 	if len(record) < len(document{}.recordsHeader()) {
 		return document{}, errors.New("not enough record fields to parse document")

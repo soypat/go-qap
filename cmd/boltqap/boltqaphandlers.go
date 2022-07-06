@@ -82,17 +82,18 @@ func (q *boltqap) handleAddDoc(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (q *boltqap) handleSearch(rw http.ResponseWriter, r *http.Request) {
-	query := strings.ToUpper(r.URL.Query().Get("Query"))
+	hq := r.URL.Query()
+	query := strings.ToUpper(hq.Get("Query"))
 	if query == "" || len(query) > 22 {
 		http.Error(rw, "invalid query", http.StatusBadRequest)
 		return
 	}
-	perPage, _ := strconv.Atoi(r.URL.Query().Get("PerPage"))
+	perPage, _ := strconv.Atoi(hq.Get("PerPage"))
 	if perPage < 10 || perPage > 200 {
 		perPage = 40
 	}
 	data := make([]qap.Header, perPage)
-	page, _ := strconv.Atoi(r.URL.Query().Get("Page"))
+	page, _ := strconv.Atoi(hq.Get("Page"))
 	log.Printf("querying: %q page %d", query, page)
 	n, total := q.filter.HumanQuery(data, query, page)
 	if n == 0 && total == 0 {
@@ -216,4 +217,8 @@ func (q *boltqap) handleImportCSV(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fmt.Fprintf(rw, "success writing %d documents to database", len(documents))
+}
+
+func (b *boltqap) handleAddRevision(rw *http.ResponseWriter, r *http.Request) {
+
 }

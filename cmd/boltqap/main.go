@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"flag"
 	"fmt"
 	"html/template"
 	"log"
@@ -24,6 +25,9 @@ func main() {
 }
 
 func run() error {
+	var addr string
+	flag.StringVar(&addr, "http", ":8089", "Address on which to serve http.")
+	flag.Parse()
 	bolt, err := bbolt.Open("qap.db", 0666, nil)
 	if err != nil {
 		return err
@@ -72,7 +76,8 @@ func run() error {
 	sv.HandleFunc("/qap/toCSV", db.handleToCSV)
 	sv.HandleFunc("/qap/importCSV", db.handleImportCSV)
 	sv.HandleFunc("/qap/doc/", db.handleGetDocument)
-	return http.ListenAndServe(":8081", sv)
+	log.Println("Server running http://127.0.0.1" + addr)
+	return http.ListenAndServe(addr, sv)
 }
 
 // templating functions.
