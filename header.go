@@ -264,6 +264,7 @@ func HeaderCodesEqual(a, b Header) bool {
 // HeadersEqual tests headers for complete equality.
 // If either a or b are invalid then HeadersEqual returns false.
 func HeadersEqual(a, b Header) bool {
-	return HeaderCodesEqual(a, b) && a.Number == b.Number &&
-		a.AttachmentNumber == b.AttachmentNumber
+	return a.Number == b.Number &&
+		a.AttachmentNumber == b.AttachmentNumber &&
+		HeaderCodesEqual(a, b)
 }
