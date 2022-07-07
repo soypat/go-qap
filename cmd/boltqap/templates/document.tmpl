@@ -7,4 +7,23 @@
 <p>Created: {{.Created.Format "2006 Jan 02 15:04:05"}}</p>
 <p>Revised: {{.Revised.Format "2006 Jan 02 15:04:05"}}</p>
 <p>Deleted: {{.Deleted}}</p>
+<h3>Revisions</h3>
+{{range .Revisions}}
+<div class="revision">
+    <p><strong>rev {{.Index}}</strong></p>
+    <p>{{.Description}}</p>
+</div>
+{{else}}
+<p><strong>rev A.1-draft</strong></p>
+{{end}}
+
+<form class="main" action="{{documentURL .}}">
+    <input name="action" type="hidden" value="addRevision">
+    <h3>Add Revision</h3>
+    <label for="rev">Index:</label>
+    <input type="text" name="rev" placeholder="i.e: A.2, or B.3-draft">
+    <label for="desc">Short description of changes:</label>
+    <input type="text" name="desc" placeholder="Minor changes to part">
+    <input type="submit">
+</form>
 {{template "footer"}}

@@ -5,7 +5,7 @@
 *.so
 *.dylib
 cmd/boltqap/boltqap
-
+*test.db
 # No need for shell scripts afaik
 *.sh
 

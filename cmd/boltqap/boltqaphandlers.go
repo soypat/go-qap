@@ -26,9 +26,14 @@ func (q *boltqap) handleGetDocument(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Println("get document", hd.String())
-	doc, err := q.GetDocument(hd)
+	doc, err := q.FindMainDocument(hd)
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	query := r.URL.Query()
+	if query.Has("action") {
+		q.handleDocumentAction(rw, r, doc, query)
 		return
 	}
 	err = q.tmpl.Lookup("document.tmpl").Execute(rw, doc)
@@ -82,17 +87,18 @@ func (q *boltqap) handleAddDoc(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (q *boltqap) handleSearch(rw http.ResponseWriter, r *http.Request) {
-	query := strings.ToUpper(r.URL.Query().Get("Query"))
+	hq := r.URL.Query()
+	query := strings.ToUpper(hq.Get("Query"))
 	if query == "" || len(query) > 22 {
 		http.Error(rw, "invalid query", http.StatusBadRequest)
 		return
 	}
-	perPage, _ := strconv.Atoi(r.URL.Query().Get("PerPage"))
+	perPage, _ := strconv.Atoi(hq.Get("PerPage"))
 	if perPage < 10 || perPage > 200 {
 		perPage = 40
 	}
 	data := make([]qap.Header, perPage)
-	page, _ := strconv.Atoi(r.URL.Query().Get("Page"))
+	page, _ := strconv.Atoi(hq.Get("Page"))
 	log.Printf("querying: %q page %d", query, page)
 	n, total := q.filter.HumanQuery(data, query, page)
 	if n == 0 && total == 0 {
@@ -118,6 +124,7 @@ func (q *boltqap) handleSearch(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (q *boltqap) handleLanding(rw http.ResponseWriter, r *http.Request) {
+	log.Println("landing")
 	const lastEditedDays = 10
 	var documents []document
 	now := time.Now()
@@ -126,6 +133,7 @@ func (q *boltqap) handleLanding(rw http.ResponseWriter, r *http.Request) {
 		documents = append(documents, d)
 		return nil
 	})
+	rw.WriteHeader(200)
 	q.tmpl.Lookup("landing.tmpl").Execute(rw, struct {
 		LastEditedDays int
 		Docs           []document
@@ -158,17 +166,17 @@ func (q *boltqap) handleImportCSV(rw http.ResponseWriter, r *http.Request) {
 	const megabyte = 1000 * 1000
 	err := r.ParseMultipartForm(12 * megabyte)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		httpErr(rw, err.Error(), nil, http.StatusInternalServerError)
 		return
 	}
 	files := r.MultipartForm.File["ImportCSV"]
 	if len(files) != 1 {
-		http.Error(rw, "ImportCSV file not found or too many files", http.StatusBadRequest)
+		httpErr(rw, "ImportCSV file not found or too many files", nil, http.StatusBadRequest)
 		return
 	}
 	f, err := files[0].Open()
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		httpErr(rw, err.Error(), nil, http.StatusInternalServerError)
 		return
 	}
 	c := csv.NewReader(f)
@@ -177,18 +185,21 @@ func (q *boltqap) handleImportCSV(rw http.ResponseWriter, r *http.Request) {
 	c.FieldsPerRecord = len(expect)
 	header, err := c.Read()
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusBadRequest)
+		httpErr(rw, "parsing csv header", err, http.StatusBadRequest)
 		return
 	}
 	for i := range expect {
 		if header[i] != expect[i] {
-			http.Error(rw, fmt.Sprintf("expected csv header %q, got %q", strings.Join(expect, ","), strings.Join(header, ",")), http.StatusBadRequest)
+			httpErr(rw, fmt.Sprintf("expected csv header %q, got %q", strings.Join(expect, ","), strings.Join(header, ",")), nil, http.StatusBadRequest)
+			return
 		}
 	}
 	var documents []document
+	var record []string
+	var err1 error
 	now := time.Now()
 	for {
-		record, err1 := c.Read()
+		record, err1 = c.Read()
 		if err1 != nil {
 			err = err1
 			break
@@ -207,13 +218,44 @@ func (q *boltqap) handleImportCSV(rw http.ResponseWriter, r *http.Request) {
 		documents = append(documents, doc)
 	}
 	if err != io.EOF && err != nil {
-		http.Error(rw, err.Error(), http.StatusBadRequest)
+		httpErr(rw, fmt.Sprintf("parsing csv data %v", record), err, http.StatusBadRequest)
+		return
+	}
+	documents, err = consolidateMainDocumentVersions(documents)
+	if err != nil {
+		httpErr(rw, "consolidating main doc versions", err, http.StatusBadRequest)
 		return
 	}
 	err = q.ImportDocuments(documents)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		httpErr(rw, "importing doc", err, http.StatusInternalServerError)
 		return
 	}
 	fmt.Fprintf(rw, "success writing %d documents to database", len(documents))
+}
+
+func (b *boltqap) handleDocumentAction(rw http.ResponseWriter, r *http.Request, doc document, query url.Values) {
+	hd, _ := doc.Header()
+	action := query.Get("action")
+	switch action {
+	case "addRevision":
+		revStr := query.Get("rev")
+		rev, err := qap.ParseRevision(revStr)
+		if err != nil {
+			httpErr(rw, "parsing revision \""+revStr+"\"", err, http.StatusBadRequest)
+			return
+		}
+		err = b.AddRevision(hd, revision{
+			Index:       rev,
+			Description: query.Get("desc"),
+		})
+		if err != nil {
+			httpErr(rw, "adding revision", err, http.StatusInternalServerError)
+			return
+		}
+		log.Println("revision added succesfully")
+	default:
+		httpErr(rw, "action not found: "+action, nil, http.StatusBadRequest)
+	}
+	http.Redirect(rw, r, headerURL(hd), http.StatusTemporaryRedirect)
 }

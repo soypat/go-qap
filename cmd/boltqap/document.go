@@ -12,6 +12,11 @@ import (
 	"github.com/soypat/go-qap"
 )
 
+type revision struct {
+	Index       qap.Revision
+	Description string
+}
+
 type document struct {
 	Project       string
 	Equipment     string
@@ -26,6 +31,8 @@ type document struct {
 	Created       time.Time
 	Revised       time.Time
 	Deleted       bool
+	// Revisions is stored DB side only.
+	Revisions []revision
 }
 
 func (d document) recordsHeader() []string {
@@ -53,6 +60,7 @@ func (d document) records() []string {
 		d.Location,
 	}
 }
+
 func docFromRecord(record []string, ignoreTime bool) (document, error) {
 	if len(record) < len(document{}.recordsHeader()) {
 		return document{}, errors.New("not enough record fields to parse document")
@@ -100,6 +108,16 @@ func (d document) key() []byte {
 	return boltKey(d.Created)
 }
 
+func (d *document) AddRevision(rev revision) error {
+	for i := range d.Revisions {
+		if d.Revisions[i].Index == rev.Index {
+			return errors.New("document revision index already exists")
+		}
+	}
+	d.Revisions = append(d.Revisions, rev)
+	return nil
+}
+
 func (d document) Info() (qap.DocInfo, error) {
 	hd, err := d.Header()
 	if err != nil {
@@ -125,6 +143,7 @@ func (d document) Revision() (qap.Revision, error) {
 	return qap.ParseRevision(d.Version)
 }
 
+// String returns the Header's document name representation i.e. "SPS-PEC-HP-023
 func (d document) String() string {
 	di, err := d.Info()
 	if err != nil {
@@ -160,6 +179,39 @@ func (d document) value() []byte {
 		panic("unreachable")
 	}
 	return b
+}
+
+func consolidateMainDocumentVersions(documents []document) ([]document, error) {
+	mdoc := make(map[qap.Header]document)
+	for _, doc := range documents {
+		hd, err := doc.Header()
+		if err != nil {
+			return nil, err
+		}
+		rev, err := doc.Revision()
+		if err != nil {
+			return nil, err
+		}
+		got, ok := mdoc[hd]
+		if !ok {
+			doc.AddRevision(revision{Index: rev})
+			mdoc[hd] = doc
+			continue
+		}
+		// we have two documents of identical header
+		if got.Version == doc.Version {
+			return nil, fmt.Errorf("conflicting document %s rev %s", doc.String(), doc.Version)
+		}
+		err = doc.AddRevision(revision{Index: rev})
+		if err != nil {
+			return nil, fmt.Errorf("attempting to merge document %s revision: %s", doc.String(), err)
+		}
+	}
+	var newDocs []document
+	for _, d := range mdoc {
+		newDocs = append(newDocs, d)
+	}
+	return newDocs, nil
 }
 
 func checkConflicts(documents []document) error {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"testing"
 	"time"
 )
@@ -23,4 +24,105 @@ func TestBoltKey(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestDoDocumentRange(t *testing.T) {
+	const testFile = "qap_test.db"
+	q, err := OpenBoltQAP(testFile, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(testFile)
+	defer q.Close()
+
+	time1 := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	time2 := time1.AddDate(10, 0, 0)
+	time3 := time2.AddDate(10, 0, 0)
+	doc1 := document{
+		Project:       "SPS",
+		Equipment:     "A",
+		DocType:       "HP",
+		SubmittedBy:   "pato",
+		Number:        1,
+		Location:      "/1/",
+		HumanName:     "human name",
+		FileExtension: "catpart",
+		Version:       "A.1-draft",
+		Created:       time1,
+		Revised:       time1,
+	}
+	doc2 := doc1
+	doc2.Equipment = "B"
+	doc2.Created = time2
+	doc3 := doc1
+	doc3.Equipment = "C"
+	doc3.Created = time3
+	err = q.CreateProject("SPS")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = q.ImportDocuments([]document{doc1, doc2, doc3})
+	if err != nil {
+		t.Error(err)
+	}
+
+	t.Run("incrementing time", func(t *testing.T) {
+		done := 0
+		q.DoDocumentsRange(time1, time3, func(d document) error {
+			if done == 0 && d.Created != time1 {
+				t.Errorf("first document expected creation time %s, got %s", time1, d.Created)
+			}
+			if done == 1 && d.Created != time2 {
+				t.Errorf("second document expected creation time %s, got %s", time2, d.Created)
+			}
+			if done == 2 && d.Created != time3 {
+				t.Errorf("third document expected creation time %s, got %s", time3, d.Created)
+			}
+			done++
+			return nil
+		})
+		if done != 3 {
+			t.Error("expected 3 documents to be iterated, got ", done)
+		}
+	})
+
+	t.Run("decrementing time", func(t *testing.T) {
+		done := 0
+		q.DoDocumentsRange(time3, time1, func(d document) error {
+			if done == 0 && d.Created != time3 {
+				t.Errorf("first document expected creation time %s, got %s", time3, d.Created)
+			}
+			if done == 1 && d.Created != time2 {
+				t.Errorf("second document expected creation time %s, got %s", time2, d.Created)
+			}
+			if done == 2 && d.Created != time1 {
+				t.Errorf("third document expected creation time %s, got %s", time1, d.Created)
+			}
+			done++
+			return nil
+		})
+		if done != 3 {
+			t.Error("expected 3 documents to be iterated, got ", done)
+		}
+	})
+
+	t.Run("decrementing time OOB", func(t *testing.T) {
+		done := 0
+		q.DoDocumentsRange(time3.AddDate(0, 0, 1), time1, func(d document) error {
+			if done == 0 && d.Created != time3 {
+				t.Errorf("first document expected creation time %s, got %s", time3, d.Created)
+			}
+			if done == 1 && d.Created != time2 {
+				t.Errorf("second document expected creation time %s, got %s", time2, d.Created)
+			}
+			if done == 2 && d.Created != time1 {
+				t.Errorf("third document expected creation time %s, got %s", time1, d.Created)
+			}
+			done++
+			return nil
+		})
+		if done != 3 {
+			t.Error("expected 3 documents to be iterated, got ", done)
+		}
+	})
 }
