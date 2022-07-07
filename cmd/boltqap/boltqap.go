@@ -13,6 +13,9 @@ import (
 	"go.etcd.io/bbolt"
 )
 
+// ErrEndLookup ends document lookup functions gracefully.
+var ErrEndLookup = errors.New("lookup ended")
+
 const timeKeyFormat = "2006-01-02 15:04:05.9999"
 
 func boltKey(t time.Time) []byte {
@@ -23,6 +26,45 @@ func boltKey(t time.Time) []byte {
 	key = append(key, padding[len(padding)-diff:]...)
 	return key
 }
+
+func OpenBoltQAP(dbname string, templates *template.Template) (*boltqap, error) {
+	bolt, err := bbolt.Open(dbname, 0666, nil)
+	if err != nil {
+		return nil, err
+	}
+	headers := make([]qap.Header, 0, 1024)
+	err = bolt.View(func(tx *bbolt.Tx) error {
+		return tx.ForEach(func(name []byte, b *bbolt.Bucket) error {
+			log.Printf("found project %s with %d keys", name, b.Stats().KeyN)
+			return b.ForEach(func(_, v []byte) error {
+				doc, err := docFromValue(v)
+				if err != nil {
+					return err
+				}
+				if doc.Deleted {
+					return nil
+				}
+				hd, err := doc.Header()
+				if err != nil {
+					return err
+				}
+				headers = append(headers, hd)
+				return nil
+			})
+
+		})
+	})
+	if err != nil {
+		return nil, fmt.Errorf("initializing headers from file data: %s", err)
+	}
+	return &boltqap{
+		db:     bolt,
+		filter: qap.NewHeaderFilter(headers),
+		tmpl:   templates,
+	}, nil
+}
+
+func (q *boltqap) Close() error { return q.db.Close() }
 
 func abs(a int) int {
 	if a < 0 {
@@ -118,6 +160,27 @@ func (q *boltqap) NewMainDocument(doc document) (newdoc document, err error) {
 	return doc, nil
 }
 
+func (q *boltqap) DoProjectDocuments(project string, f func(d document) error) error {
+	return q.db.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(project))
+		if b == nil {
+			return fmt.Errorf("project %q not found", project)
+		}
+		return b.ForEach(func(k, v []byte) error {
+			doc, err := docFromValue(v)
+			if err != nil {
+				log.Println("error reading document from database: ", err.Error())
+				return nil
+			}
+			err = f(doc)
+			if errors.Is(err, ErrEndLookup) {
+				return nil
+			}
+			return err
+		})
+	})
+}
+
 func (q *boltqap) DoDocuments(f func(d document) error) error {
 	return q.db.View(func(tx *bbolt.Tx) error {
 		return tx.ForEach(func(name []byte, b *bbolt.Bucket) error {
@@ -127,7 +190,11 @@ func (q *boltqap) DoDocuments(f func(d document) error) error {
 					log.Println("error reading document from database: ", err.Error())
 					return nil
 				}
-				return f(doc)
+				err = f(doc)
+				if errors.Is(err, ErrEndLookup) {
+					return nil
+				}
+				return err
 			})
 		})
 	})
@@ -161,6 +228,9 @@ func (q *boltqap) DoDocumentsRange(startTime, endTime time.Time, f func(d docume
 					continue
 				}
 				err = f(d)
+				if errors.Is(err, ErrEndLookup) {
+					break
+				}
 				if err != nil {
 					return err
 				}
@@ -203,6 +273,58 @@ func (q *boltqap) ImportDocuments(documents []document) (err error) {
 	return nil
 }
 
+// FindMainDocument finds main document ignoring attachment.
+func (q *boltqap) FindMainDocument(target qap.Header) (doc document, err error) {
+	err = target.Validate()
+	if err != nil {
+		return document{}, err
+	}
+	err = q.DoProjectDocuments(target.Project(), func(d document) error {
+		h, err := d.Header()
+		if err != nil {
+			return fmt.Errorf("document %s has Header error: %s", d, err)
+		}
+		if qap.HeaderCodesEqual(h, target) {
+			doc = d
+			return ErrEndLookup
+		}
+		return nil
+	})
+	return doc, err
+}
+
+func (q *boltqap) AddRevision(target qap.Header, newrev revision) error {
+	err := newrev.Index.Validate()
+	if err != nil {
+		return err
+	}
+	doc, err := q.FindMainDocument(target)
+	if err != nil {
+		return err
+	}
+	doc.Revisions = append(doc.Revisions, newrev)
+	return q.Update(doc)
+}
+
+func (q *boltqap) Update(d document) error {
+	_, err := d.Info()
+	if err != nil {
+		return err
+	}
+	return q.db.Update(func(tx *bbolt.Tx) error {
+		buck := tx.Bucket([]byte(d.Project))
+		if buck == nil {
+			return errors.New(d.Project + " project does not exist")
+		}
+		key := d.key()
+		exist := buck.Get(key)
+		if exist == nil {
+			return errors.New(d.String() + " document does not exist in DB")
+		}
+		return buck.Put(key, d.value())
+	})
+}
+
 func (q *boltqap) importDocuments(tx *bbolt.Tx, documents []document) error {
 	for _, doc := range documents {
 		bucket := tx.Bucket([]byte(doc.Project))
@@ -220,35 +342,4 @@ func (q *boltqap) importDocuments(tx *bbolt.Tx, documents []document) error {
 		}
 	}
 	return nil
-}
-
-func (q *boltqap) GetDocument(hd qap.Header) (document, error) {
-	thedoc := document{}
-	gotDoc := errors.New("got the document")
-	err := q.db.View(func(tx *bbolt.Tx) error {
-		buck := tx.Bucket([]byte(hd.Project()))
-		if buck == nil {
-			return errors.New("project not exist:" + hd.Project())
-		}
-		return buck.ForEach(func(k, v []byte) error {
-			doc, err := docFromValue(v)
-			if err != nil {
-				log.Println("error reading document from database: ", err.Error())
-				return nil
-			}
-			hdgot, err := doc.Header()
-			if qap.HeadersEqual(hd, hdgot) {
-				thedoc = doc
-				return gotDoc
-			}
-			return nil
-		})
-	})
-	if err == nil {
-		return thedoc, errors.New("did not find document" + hd.String())
-	}
-	if !errors.Is(err, gotDoc) {
-		return thedoc, err
-	}
-	return thedoc, nil
 }

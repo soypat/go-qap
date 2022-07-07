@@ -43,6 +43,8 @@ type Revision struct {
 	IsRelease bool
 }
 
+// ParseRevision creates a Revision from a formatted string
+// i.e. "B.3-draft", "A.1"
 func ParseRevision(revision string) (Revision, error) {
 	if len(revision) < 3 {
 		return Revision{}, errors.New("revision string must be at least length 3")
