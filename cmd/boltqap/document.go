@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -82,13 +83,6 @@ func (d document) records() []string {
 	}
 }
 
-func (d document) Version() string {
-	if len(d.Revisions) == 0 {
-		return qap.NewRevision().String()
-	}
-	return d.Revisions[len(d.Revisions)-1].Index.String()
-}
-
 func docFromRecord(record []string, ignoreTime bool) (document, error) {
 	if len(record) < len(document{}.recordsHeader()) {
 		return document{}, errors.New("not enough record fields to parse document")
@@ -140,16 +134,6 @@ func (d document) key() []byte {
 	return boltKey(d.Created)
 }
 
-func (d *document) AddRevision(rev revision) error {
-	for i := range d.Revisions {
-		if d.Revisions[i].Index == rev.Index {
-			return errors.New("document revision index already exists")
-		}
-	}
-	d.Revisions = append(d.Revisions, rev)
-	return nil
-}
-
 func (d document) Info() (qap.DocInfo, error) {
 	hd, err := d.Header()
 	if err != nil {
@@ -173,6 +157,20 @@ func (d document) Revision() qap.Revision {
 		return qap.NewRevision()
 	}
 	return d.Revisions[len(d.Revisions)-1].Index
+}
+
+func (d *document) AddRevision(rev revision) error {
+	for i := range d.Revisions {
+		if d.Revisions[i].Index == rev.Index {
+			return errors.New("document revision index already exists")
+		}
+	}
+	d.Revisions = append(d.Revisions, rev)
+	return nil
+}
+
+func (d document) Version() string {
+	return d.Revision().String()
 }
 
 // String returns the Header's document name representation i.e. "SPS-PEC-HP-023
@@ -205,7 +203,7 @@ func (d document) Header() (qap.Header, error) {
 	return qap.ParseHeader(fmt.Sprintf("%s-%s-%s-%d.%02d", d.Project, d.Equipment, d.DocType, d.Number, d.Attachment), false)
 }
 
-func (d document) value() []byte {
+func (d *document) value() []byte {
 	b, err := json.Marshal(d)
 	if err != nil {
 		panic("unreachable")
@@ -221,20 +219,22 @@ func consolidateMainDocumentVersions(documents []document) ([]document, error) {
 			return nil, err
 		}
 		rev := doc.Revision()
-		got, ok := mdoc[hd]
+		original, ok := mdoc[hd]
 		if !ok {
 			doc.AddRevision(revision{Index: rev})
 			mdoc[hd] = doc
 			continue
 		}
 		// we have two documents of identical header
-		if got.Revision() == doc.Revision() {
+		if original.Revision() == doc.Revision() {
 			return nil, fmt.Errorf("conflicting document %s rev %s", doc.String(), doc.Revision())
 		}
-		err = doc.AddRevision(revision{Index: rev})
+		err = original.AddRevision(revision{Index: rev})
 		if err != nil {
 			return nil, fmt.Errorf("attempting to merge document %s revision: %s", doc.String(), err)
 		}
+		log.Println("revision ", rev, " added to ", original.String())
+		mdoc[hd] = original
 	}
 	var newDocs []document
 	for _, d := range mdoc {

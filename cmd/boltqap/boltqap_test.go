@@ -28,6 +28,48 @@ func TestBoltKey(t *testing.T) {
 	}
 }
 
+func TestBoltStore(t *testing.T) {
+	const testFile = "qap_test.db"
+	q, err := OpenBoltQAP(testFile, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(testFile)
+	defer q.Close()
+	rev, err := qap.ParseRevision("C.3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	time1 := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	doc1 := document{
+		Project:       "SPS",
+		Equipment:     "A",
+		DocType:       "HP",
+		SubmittedBy:   "pato",
+		Number:        1,
+		Location:      "/1/",
+		HumanName:     "human name",
+		FileExtension: "catpart",
+		Revisions:     []revision{{Index: qap.NewRevision(), Description: "first"}, {Index: rev, Description: "second"}},
+		Created:       time1,
+		Revised:       time1,
+	}
+	err = q.CreateProject(doc1.Project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = q.addDoc(doc1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hd, err := doc1.Header()
+	got, err := q.FindDocument(hd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertDocEqual(t, got, doc1)
+}
+
 func TestDoDocumentRange(t *testing.T) {
 	const testFile = "qap_test.db"
 	q, err := OpenBoltQAP(testFile, nil)

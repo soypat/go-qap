@@ -26,7 +26,7 @@ func (q *boltqap) handleGetDocument(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Println("get document", hd.String())
-	doc, err := q.FindMainDocument(hd)
+	doc, err := q.FindDocument(hd)
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return

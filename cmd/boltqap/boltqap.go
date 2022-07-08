@@ -164,7 +164,7 @@ func (q *boltqap) addDoc(doc document) error {
 }
 
 func (q *boltqap) DoProjectDocuments(project string, f func(d document) error) error {
-	return q.db.View(func(tx *bbolt.Tx) error {
+	err := q.db.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte(project))
 		if b == nil {
 			return fmt.Errorf("project %q not found", project)
@@ -175,13 +175,13 @@ func (q *boltqap) DoProjectDocuments(project string, f func(d document) error) e
 				log.Println("error reading document from database: ", err.Error())
 				return nil
 			}
-			err = f(doc)
-			if errors.Is(err, ErrEndLookup) {
-				return nil
-			}
-			return err
+			return f(doc)
 		})
 	})
+	if err == nil || errors.Is(err, ErrEndLookup) {
+		return nil
+	}
+	return err
 }
 
 func (q *boltqap) DoDocuments(f func(d document) error) error {
@@ -276,8 +276,8 @@ func (q *boltqap) ImportDocuments(documents []document) (err error) {
 	return nil
 }
 
-// FindMainDocument finds main document ignoring attachment.
-func (q *boltqap) FindMainDocument(target qap.Header) (doc document, err error) {
+// FindDocument finds main document ignoring attachment.
+func (q *boltqap) FindDocument(target qap.Header) (doc document, err error) {
 	err = target.Validate()
 	if err != nil {
 		return document{}, err
@@ -287,7 +287,7 @@ func (q *boltqap) FindMainDocument(target qap.Header) (doc document, err error) 
 		if err != nil {
 			return fmt.Errorf("document %s has Header error: %s", d, err)
 		}
-		if qap.HeaderCodesEqual(h, target) {
+		if qap.HeadersEqual(h, target) {
 			doc = d
 			return ErrEndLookup
 		}
@@ -301,7 +301,7 @@ func (q *boltqap) AddRevision(target qap.Header, newrev revision) error {
 	if err != nil {
 		return err
 	}
-	doc, err := q.FindMainDocument(target)
+	doc, err := q.FindDocument(target)
 	if err != nil {
 		return err
 	}
