@@ -8,14 +8,7 @@
 <p>Revised: {{.Revised.Format "2006 Jan 02 15:04:05"}}</p>
 <p>Deleted: {{.Deleted}}</p>
 <h3>Revisions</h3>
-{{range .Revisions}}
-<div class="revision">
-    <p><strong>rev {{.Index}}</strong></p>
-    <p>{{.Description}}</p>
-</div>
-{{else}}
-<p><strong>rev A.1-draft</strong></p>
-{{end}}
+
 
 <form class="main" action="{{documentURL .}}">
     <input name="action" type="hidden" value="addRevision">
@@ -26,4 +19,39 @@
     <input type="text" name="desc" placeholder="Minor changes to part">
     <input type="submit">
 </form>
+
+{{range .Revisions}}
+<div class="revision">
+    <p><strong>rev {{.Index}}</strong></p>
+    <p>{{.Description}}</p>
+</div>
+{{else}}
+<p><strong>rev A.1-draft</strong> (default)</p>
+{{end}}
+
+{{if eq .Attachment 0}}
+<form class="main" action="{{documentURL .}}">
+    <input name="action" type="hidden" value="addAttachment">
+    <h3>Add Attachment</h3>
+    <input name="Code" type="hidden" value="{{.Project}}-{{.Equipment}}-{{.DocType}}">
+    <label for="HumanName">Human Name:</label>
+    <input type="text" id="HumanName" name="HumanName" placeholder="Thingy version 2-final-Last.docx">
+    <label for="SubmittedBy">Submitted by:</label>
+    <input type="text" id="SubmittedBy" name="SubmittedBy" placeholder="Sebastian">
+    <label for="FileExtension">File extension:</label>
+    <input type="text" id="FileExtension" name="FileExtension" placeholder="i.e: .stl">
+    <label for="Location">Electronic repository location:</label>
+    <input type="text" id="Location" name="Location" placeholder="i.e: projects/LHC/parts/cad">
+    <input type="submit" value="Submit">
+</form>
+
+{{range .Attachments}}
+<div class="attachment">
+    <li><strong><a href="{{headerURL .}}">{{ . }}</a></strong></li>
+</div>
+{{else}}
+<p><strong>No attachments</strong></p>
+{{end}}
+{{end}}
+
 {{template "footer"}}

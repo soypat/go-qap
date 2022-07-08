@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"html/template"
@@ -84,6 +85,16 @@ var funcs = template.FuncMap{
 			return ""
 		}
 		return "/qap/doc/" + hd.String()
+	},
+	"debug": func(a any) template.HTML {
+		b, err := json.Marshal(a)
+		if err != nil {
+			b, err = json.Marshal(&a)
+		}
+		if err != nil {
+			return template.HTML(err.Error())
+		}
+		return template.HTML(b)
 	},
 }
 

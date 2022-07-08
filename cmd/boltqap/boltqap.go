@@ -97,35 +97,29 @@ func (q *boltqap) CreateProject(projectName string) error {
 	return nil
 }
 
+func (q *boltqap) NewDocument(doc document) error {
+	info, err := doc.ValidateForAdmission()
+	err = q.filter.Do(func(_ int, h qap.Header) error {
+		if qap.HeadersEqual(h, info.Header) {
+			return errors.New("document already exists:" + h.String())
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return q.addDoc(doc)
+}
+
 func (q *boltqap) NewMainDocument(doc document) (newdoc document, err error) {
-	if doc.Version == "" {
-		doc.Version = qap.NewRevision().String()
+	if doc.Revised.Before(doc.Created) {
+		doc.Revised = time.Now() // ensure consistency
 	}
-	switch {
-	case doc.SubmittedBy == "":
-		return document{}, errors.New("empty submitter")
-	case doc.HumanName == "":
-		return document{}, errors.New("empty human name")
-	case doc.FileExtension == "":
-		return document{}, errors.New("empty file extension")
-	case doc.Location == "":
-		return document{}, errors.New("empty location")
-	case time.Since(doc.Created) > 24*time.Hour:
-		return document{}, errors.New("document created too long ago")
-	}
-	doc.Revised = time.Now()
+	info, err := doc.ValidateForAdmission()
 	doc.Number = 1 // Actual number assigned below.
-	header, err := doc.Header()
-	if err != nil {
-		return document{}, errors.New("document header invalidly formatted: " + err.Error())
-	}
-	_, err = doc.Revision()
-	if err != nil {
-		return document{}, errors.New("document revision invalidly formatted: " + err.Error())
-	}
 	var maxCode int32
 	q.filter.Do(func(i int, h qap.Header) error {
-		if qap.HeaderCodesEqual(h, header) {
+		if qap.HeaderCodesEqual(h, info.Header) {
 			if h.Number > maxCode {
 				maxCode = h.Number
 			}
@@ -133,13 +127,26 @@ func (q *boltqap) NewMainDocument(doc document) (newdoc document, err error) {
 		return nil
 	})
 	doc.Number = int(maxCode) + 1
-	header.Number = maxCode + 1
-	err = q.filter.AddHeader(header)
+	err = q.addDoc(doc)
 	if err != nil {
-		return newdoc, errors.New("unexpected error attempting to add document: " + err.Error())
+		return document{}, err
 	}
-	err = q.db.Update(func(tx *bbolt.Tx) error {
-		b := tx.Bucket([]byte(header.Project()))
+	return doc, nil
+}
+
+// addDoc adds the document with minimal validation. If document already
+// exists it returns error.
+func (q *boltqap) addDoc(doc document) error {
+	hd, err := doc.Header()
+	if err != nil {
+		return err
+	}
+	err = q.filter.AddHeader(hd)
+	if err != nil {
+		return errors.New("unexpected error attempting to add document: " + err.Error())
+	}
+	return q.db.Update(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(hd.Project()))
 		if b == nil {
 			return errors.New("project not exist")
 		}
@@ -154,14 +161,10 @@ func (q *boltqap) NewMainDocument(doc document) (newdoc document, err error) {
 		}
 		return nil
 	})
-	if err != nil {
-		return document{}, err
-	}
-	return doc, nil
 }
 
 func (q *boltqap) DoProjectDocuments(project string, f func(d document) error) error {
-	return q.db.View(func(tx *bbolt.Tx) error {
+	err := q.db.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte(project))
 		if b == nil {
 			return fmt.Errorf("project %q not found", project)
@@ -172,13 +175,13 @@ func (q *boltqap) DoProjectDocuments(project string, f func(d document) error) e
 				log.Println("error reading document from database: ", err.Error())
 				return nil
 			}
-			err = f(doc)
-			if errors.Is(err, ErrEndLookup) {
-				return nil
-			}
-			return err
+			return f(doc)
 		})
 	})
+	if err == nil || errors.Is(err, ErrEndLookup) {
+		return nil
+	}
+	return err
 }
 
 func (q *boltqap) DoDocuments(f func(d document) error) error {
@@ -273,8 +276,8 @@ func (q *boltqap) ImportDocuments(documents []document) (err error) {
 	return nil
 }
 
-// FindMainDocument finds main document ignoring attachment.
-func (q *boltqap) FindMainDocument(target qap.Header) (doc document, err error) {
+// FindDocument finds main document ignoring attachment.
+func (q *boltqap) FindDocument(target qap.Header) (doc document, err error) {
 	err = target.Validate()
 	if err != nil {
 		return document{}, err
@@ -284,7 +287,7 @@ func (q *boltqap) FindMainDocument(target qap.Header) (doc document, err error) 
 		if err != nil {
 			return fmt.Errorf("document %s has Header error: %s", d, err)
 		}
-		if qap.HeaderCodesEqual(h, target) {
+		if qap.HeadersEqual(h, target) {
 			doc = d
 			return ErrEndLookup
 		}
@@ -298,7 +301,7 @@ func (q *boltqap) AddRevision(target qap.Header, newrev revision) error {
 	if err != nil {
 		return err
 	}
-	doc, err := q.FindMainDocument(target)
+	doc, err := q.FindDocument(target)
 	if err != nil {
 		return err
 	}
