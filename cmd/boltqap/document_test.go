@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/soypat/go-qap"
 )
 
 func TestDocumentRecords(t *testing.T) {
@@ -11,6 +13,7 @@ func TestDocumentRecords(t *testing.T) {
 	if err != nil {
 		t.Fatal("incorrect test:", err)
 	}
+	rev, _ := qap.ParseRevision("B.2")
 	d := document{
 		Project:       "SPS",
 		Equipment:     "HRC",
@@ -21,7 +24,7 @@ func TestDocumentRecords(t *testing.T) {
 		HumanName:     "syskeyd format \"sempre\"",
 		FileExtension: ".CATPART",
 		Location:      "system/d/cad",
-		Version:       "A.1-draft",
+		Revisions:     []revision{{Index: rev}},
 		Created:       now,
 		Revised:       now,
 	}
@@ -39,8 +42,8 @@ func TestDocumentRecords(t *testing.T) {
 }
 
 func assertDocEqual(a, b document) error {
-	if a.Version != b.Version {
-		return fmt.Errorf("Version not equal %q, %q", a.Version, b.Version)
+	if a.Revision() != b.Revision() {
+		return fmt.Errorf("Revision not equal %q, %q", a.Revision(), b.Revision())
 	}
 	if a.Location != b.Location {
 		return fmt.Errorf("Location not equal %q, %q", a.Location, b.Location)

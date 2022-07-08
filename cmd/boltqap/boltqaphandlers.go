@@ -53,28 +53,10 @@ func (q *boltqap) handleCreateProject(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (q *boltqap) handleAddDoc(rw http.ResponseWriter, r *http.Request) {
-	var form newDocForm
-	err := bindFormToStruct(&form, r)
+	doc, err := createDocumentFromForm(r)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusBadRequest)
+		httpErr(rw, "could not create document from form", err, http.StatusBadRequest)
 		return
-	}
-	prj, eq, dt := qap.ParseDocumentCodes(form.Code)
-	if prj == "" || eq == "" || dt == "" {
-		http.Error(rw, "invalid code "+form.Code, http.StatusBadRequest)
-		return
-	}
-	now := time.Now()
-	doc := document{
-		Project:       prj,
-		Equipment:     eq,
-		DocType:       dt,
-		HumanName:     form.HumanName,
-		SubmittedBy:   form.SubmittedBy,
-		Location:      form.Location,
-		FileExtension: form.FileExtension,
-		Created:       now,
-		Revised:       now,
 	}
 	newdoc, err := q.NewMainDocument(doc)
 	if err != nil {
@@ -82,7 +64,7 @@ func (q *boltqap) handleAddDoc(rw http.ResponseWriter, r *http.Request) {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	log.Printf("added %s", strings.Join([]string{prj, eq, dt}, "-"))
+	log.Printf("added %s", doc.String())
 	http.Redirect(rw, r, "/qap/doc/"+newdoc.String(), http.StatusTemporaryRedirect)
 }
 
@@ -253,9 +235,41 @@ func (b *boltqap) handleDocumentAction(rw http.ResponseWriter, r *http.Request, 
 			httpErr(rw, "adding revision", err, http.StatusInternalServerError)
 			return
 		}
-		log.Println("revision added succesfully")
+	case "addAttachment":
+		attachment, err := createDocumentFromForm(r)
+		if err != nil {
+			httpErr(rw, "creating document from form", err, http.StatusBadRequest)
+			return
+		}
+
+		newAttachment := uint8(1)
+		for i := range doc.Attachments {
+			if doc.Attachments[i].AttachmentNumber >= newAttachment {
+				newAttachment = doc.Attachments[i].AttachmentNumber + 1
+			}
+		}
+		attachment.Attachment = int(newAttachment)
+		attachment.Number = doc.Number
+		ainfo, err := attachment.Info()
+		if err != nil {
+			httpErr(rw, "attachment malformed", err, http.StatusInternalServerError)
+			return
+		}
+		err = b.NewDocument(attachment)
+		if err != nil {
+			httpErr(rw, "adding attachment to DB ", err, http.StatusInternalServerError)
+			return
+		}
+		doc.Attachments = append(doc.Attachments, ainfo.Header)
+		err = b.Update(doc)
+		if err != nil {
+			httpErr(rw, "updating existing document", err, http.StatusInternalServerError)
+			return
+		}
+
 	default:
 		httpErr(rw, "action not found: "+action, nil, http.StatusBadRequest)
 	}
+	log.Printf("document action %s success", action)
 	http.Redirect(rw, r, headerURL(hd), http.StatusTemporaryRedirect)
 }

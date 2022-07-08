@@ -4,6 +4,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/soypat/go-qap"
 )
 
 func TestBoltKey(t *testing.T) {
@@ -34,7 +36,10 @@ func TestDoDocumentRange(t *testing.T) {
 	}
 	defer os.Remove(testFile)
 	defer q.Close()
-
+	rev, err := qap.ParseRevision("C.3")
+	if err != nil {
+		t.Fatal(err)
+	}
 	time1 := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
 	time2 := time1.AddDate(10, 0, 0)
 	time3 := time2.AddDate(10, 0, 0)
@@ -47,7 +52,7 @@ func TestDoDocumentRange(t *testing.T) {
 		Location:      "/1/",
 		HumanName:     "human name",
 		FileExtension: "catpart",
-		Version:       "A.1-draft",
+		Revisions:     []revision{{Index: rev}},
 		Created:       time1,
 		Revised:       time1,
 	}

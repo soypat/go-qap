@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,12 +28,32 @@ type document struct {
 	HumanName     string
 	FileExtension string
 	Location      string
-	Version       string
 	Created       time.Time
 	Revised       time.Time
 	Deleted       bool
 	// Revisions is stored DB side only.
-	Revisions []revision
+	Revisions   []revision
+	Attachments []qap.Header
+}
+
+func (doc document) ValidateForAdmission() (qap.DocInfo, error) {
+	info, err := doc.Info()
+	if err != nil {
+		return info, err
+	}
+	switch {
+	case doc.SubmittedBy == "":
+		return info, errors.New("empty submitter")
+	case doc.HumanName == "":
+		return info, errors.New("empty human name")
+	case doc.FileExtension == "":
+		return info, errors.New("empty file extension")
+	case doc.Location == "":
+		return info, errors.New("empty location")
+	case time.Since(doc.Created) > 24*time.Hour:
+		return info, errors.New("document created too long ago")
+	}
+	return info, nil
 }
 
 func (d document) recordsHeader() []string {
@@ -51,7 +72,7 @@ func (d document) recordsHeader() []string {
 func (d document) records() []string {
 	return []string{
 		d.String(),
-		d.Version,
+		d.Version(),
 		d.SubmittedBy,
 		d.HumanName,
 		d.Created.Format(timeKeyFormat),
@@ -59,6 +80,13 @@ func (d document) records() []string {
 		d.FileExtension,
 		d.Location,
 	}
+}
+
+func (d document) Version() string {
+	if len(d.Revisions) == 0 {
+		return qap.NewRevision().String()
+	}
+	return d.Revisions[len(d.Revisions)-1].Index.String()
 }
 
 func docFromRecord(record []string, ignoreTime bool) (document, error) {
@@ -83,13 +111,17 @@ func docFromRecord(record []string, ignoreTime bool) (document, error) {
 			return document{}, errors.New("parsing doc record creation field: " + err.Error())
 		}
 	}
+	rev, err := qap.ParseRevision(record[1])
+	if err != nil {
+		return document{}, err
+	}
 	d := document{
 		Project:       rec.Project(),
 		Equipment:     rec.Equipment(),
 		DocType:       rec.DocumentType(),
 		Number:        int(rec.Number),
 		Attachment:    int(rec.AttachmentNumber),
-		Version:       record[1],
+		Revisions:     []revision{{Index: rev}},
 		SubmittedBy:   record[2],
 		HumanName:     record[3],
 		Created:       created,
@@ -123,10 +155,7 @@ func (d document) Info() (qap.DocInfo, error) {
 	if err != nil {
 		return qap.DocInfo{}, err
 	}
-	r, err := d.Revision()
-	if err != nil {
-		return qap.DocInfo{}, err
-	}
+	r := d.Revision()
 	di := qap.DocInfo{
 		Header:       hd,
 		Revision:     r,
@@ -139,8 +168,11 @@ func (d document) Info() (qap.DocInfo, error) {
 	return di, nil
 }
 
-func (d document) Revision() (qap.Revision, error) {
-	return qap.ParseRevision(d.Version)
+func (d document) Revision() qap.Revision {
+	if len(d.Revisions) == 0 {
+		return qap.NewRevision()
+	}
+	return d.Revisions[len(d.Revisions)-1].Index
 }
 
 // String returns the Header's document name representation i.e. "SPS-PEC-HP-023
@@ -188,10 +220,7 @@ func consolidateMainDocumentVersions(documents []document) ([]document, error) {
 		if err != nil {
 			return nil, err
 		}
-		rev, err := doc.Revision()
-		if err != nil {
-			return nil, err
-		}
+		rev := doc.Revision()
 		got, ok := mdoc[hd]
 		if !ok {
 			doc.AddRevision(revision{Index: rev})
@@ -199,8 +228,8 @@ func consolidateMainDocumentVersions(documents []document) ([]document, error) {
 			continue
 		}
 		// we have two documents of identical header
-		if got.Version == doc.Version {
-			return nil, fmt.Errorf("conflicting document %s rev %s", doc.String(), doc.Version)
+		if got.Revision() == doc.Revision() {
+			return nil, fmt.Errorf("conflicting document %s rev %s", doc.String(), doc.Revision())
 		}
 		err = doc.AddRevision(revision{Index: rev})
 		if err != nil {
@@ -263,9 +292,39 @@ func bindFormToStruct(a any, r *http.Request) error {
 		switch field.Kind() {
 		case reflect.String:
 			field.Set(reflect.ValueOf(val))
+		case reflect.Int:
+			d, err := strconv.Atoi(val)
+			if err != nil {
+				return errors.New("could not parse integer: " + err.Error())
+			}
+			field.Set(reflect.ValueOf(d))
 		default:
 			return errors.New("field of kind " + field.Kind().String() + " unsupported")
 		}
 	}
 	return nil
+}
+
+func createDocumentFromForm(r *http.Request) (document, error) {
+	var form newDocForm
+	err := bindFormToStruct(&form, r)
+	if err != nil {
+		return document{}, err
+	}
+	prj, eq, dt := qap.ParseDocumentCodes(form.Code)
+	if prj == "" || eq == "" || dt == "" {
+		return document{}, err
+	}
+	now := time.Now()
+	return document{
+		Project:       prj,
+		Equipment:     eq,
+		DocType:       dt,
+		HumanName:     form.HumanName,
+		SubmittedBy:   form.SubmittedBy,
+		Location:      form.Location,
+		FileExtension: form.FileExtension,
+		Created:       now,
+		Revised:       now,
+	}, nil
 }
