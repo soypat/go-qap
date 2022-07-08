@@ -20,7 +20,10 @@ import (
 func (q *boltqap) handleGetDocument(rw http.ResponseWriter, r *http.Request) {
 	upath := r.URL.Path[1:]
 	fpath := path.Base(upath)
-	hd, err := qap.ParseHeader(fpath, true)
+	hd, err := qap.ParseHeader(fpath, false)
+	if err != nil {
+		hd, err = qap.ParseHeader(fpath, true)
+	}
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusBadRequest)
 		return
