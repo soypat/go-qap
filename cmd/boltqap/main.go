@@ -24,6 +24,8 @@ func main() {
 	log.Println("finished succesfully")
 }
 
+var _htmlTemplates *template.Template
+
 func run() error {
 	var addr string
 	flag.StringVar(&addr, "http", ":8089", "Address on which to serve http.")
@@ -32,6 +34,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	_htmlTemplates = tmpl
 	db, err := OpenBoltQAP("qap.db", tmpl)
 	if err != nil {
 		return err
@@ -44,6 +47,7 @@ func run() error {
 	sv.HandleFunc("/qap/createProject", db.handleCreateProject)
 	sv.HandleFunc("/qap/toCSV", db.handleToCSV)
 	sv.HandleFunc("/qap/importCSV", db.handleImportCSV)
+	sv.HandleFunc("/qap/downloadDB", db.handleDownloadDB)
 	sv.HandleFunc("/qap/doc/", db.handleGetDocument)
 	log.Println("Server running http://127.0.0.1" + addr)
 	return http.ListenAndServe(addr, sv)
@@ -51,10 +55,13 @@ func run() error {
 
 func httpErr(w http.ResponseWriter, msg string, err error, code int) {
 	if err != nil {
-		msg += ": " + err.Error()
+		msg = msg + ": " + err.Error()
 	}
+	msg = "<h4>" + msg + "</h4>"
 	log.Println(msg)
-	http.Error(w, msg, code)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(code)
+	_htmlTemplates.Lookup("plain.tmpl").Execute(w, msg)
 }
 
 // templating functions.

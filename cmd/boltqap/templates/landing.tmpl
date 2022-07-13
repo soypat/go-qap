@@ -20,9 +20,8 @@
 {{ range $key, $doc := .Docs }}
    <li><strong><a href="{{$doc.URL}}">{{ $doc }}</a>:</strong> Created: {{ $doc.Created.Format "2006 Jan 02 15:04"}} <span style="color:darkblue;">Submitted by: {{$doc.SubmittedBy}}</span> <span style="color:rgb(0, 67, 67)"> Human Name: {{$doc.HumanName}}</span></li>
 {{ end }}
-<a href="/qap/toCSV">
-   <button >Download Database</button>
-</a>
+<a href="/qap/toCSV"><button>Download Database (CSV)</button></a>
+<a href="/qap/downloadDB"><button>Download Database (BBolt database file)</button></a>
 
 <form class="main" action="/qap/createProject">
    <h3>New Project</h3>

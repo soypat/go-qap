@@ -276,7 +276,7 @@ func (q *boltqap) ImportDocuments(documents []document) (err error) {
 	return nil
 }
 
-// FindDocument finds main document ignoring attachment.
+// FindDocument finds the document identically matching the header.
 func (q *boltqap) FindDocument(target qap.Header) (doc document, err error) {
 	err = target.Validate()
 	if err != nil {
