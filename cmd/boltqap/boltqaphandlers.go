@@ -131,6 +131,7 @@ func (q *boltqap) handleSearch(rw http.ResponseWriter, r *http.Request) {
 
 func (q *boltqap) handleLanding(rw http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
+		log.Println("unknown path ", r.URL.Path)
 		httpErr(rw, "404 page not found", nil, 404)
 		return
 	}
@@ -186,7 +187,7 @@ func (q *boltqap) handleImportCSV(rw http.ResponseWriter, r *http.Request) {
 	}
 	f, err := files[0].Open()
 	if err != nil {
-		httpErr(rw, err.Error(), nil, http.StatusInternalServerError)
+		httpErr(rw, "opening multipart form file", err, http.StatusInternalServerError)
 		return
 	}
 	c := csv.NewReader(f)
@@ -249,12 +250,18 @@ func (b *boltqap) handleDocumentAction(rw http.ResponseWriter, r *http.Request, 
 	action := query.Get("action")
 	switch action {
 	case "addRevision":
+		isRelease := query.Get("isrelease") == "on"
 		revStr := query.Get("rev")
 		rev, err := qap.ParseRevision(revStr)
 		if err != nil {
 			httpErr(rw, "parsing revision \""+revStr+"\"", err, http.StatusBadRequest)
 			return
 		}
+		if isRelease && !rev.IsRelease {
+			httpErr(rw, "IsRelease form mismatch", nil, http.StatusBadRequest)
+			return
+		}
+		rev.IsRelease = isRelease // override to draft status unless specified otherwise.
 		err = b.AddRevision(hd, revision{
 			Index:       rev,
 			Description: query.Get("desc"),
@@ -297,6 +304,7 @@ func (b *boltqap) handleDocumentAction(rw http.ResponseWriter, r *http.Request, 
 
 	default:
 		httpErr(rw, "action not found: "+action, nil, http.StatusBadRequest)
+		return
 	}
 	log.Printf("document action %s success", action)
 	http.Redirect(rw, r, headerURL(hd), http.StatusTemporaryRedirect)

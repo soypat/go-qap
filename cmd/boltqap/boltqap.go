@@ -305,6 +305,12 @@ func (q *boltqap) AddRevision(target qap.Header, newrev revision) error {
 	if err != nil {
 		return err
 	}
+	incoming := newrev.Index
+	latest := doc.Revision()
+	min, maj := qap.AreSequential(latest, incoming)
+	if !min && !maj {
+		return errors.New("revision is not sequential")
+	}
 	doc.Revisions = append(doc.Revisions, newrev)
 	return q.Update(doc)
 }

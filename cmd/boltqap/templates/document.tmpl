@@ -1,9 +1,13 @@
 {{template "header"}}
 <h2>{{.HumanName}} - {{.String}}</h2>
+<p>Filename: <span style="color:rgb(1, 96, 11)">{{.Filename}}</span></p>
+<p>Legacy filename: <span style="color:brown">{{.LegacyName}}</span></p>
+
 <p>Submitted by <strong>{{.SubmittedBy}}</strong></p>
 <p>File extension: {{.FileExtension}}</p>
 <p>Location: {{.Location}}</p>
 <p>Version: {{.Version}}</p>
+
 <p>Created: {{.Created.Format "2006 Jan 02 15:04:05"}}</p>
 <p>Revised: {{.Revised.Format "2006 Jan 02 15:04:05"}}</p>
 <p>Deleted: {{.Deleted}}</p>
@@ -17,6 +21,8 @@
     <input type="text" name="rev" placeholder="i.e: A.2, or B.3-draft">
     <label for="desc">Short description of changes:</label>
     <input type="text" name="desc" placeholder="Minor changes to part">
+    <label for="draft">Is approved/release:</label>
+    <input type="checkbox" name="isrelease">
     <input type="submit">
 </form>
 
