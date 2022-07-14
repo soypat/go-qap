@@ -103,8 +103,13 @@ func (q *boltqap) CreateProject(projectName string) error {
 		return errors.New("invalid project name: " + qap.ErrBadProjectCode.Error())
 	}
 	err := q.db.Update(func(tx *bbolt.Tx) error {
-		_, err := tx.CreateBucket([]byte(projectName))
-		return err
+		b, err := tx.CreateBucket([]byte(projectName))
+		if err != nil {
+			return err
+		}
+		projectbytes, _ := json.Marshal(qap.Project{Code: [3]byte{0: projectName[0], 1: projectName[1], 2: projectName[2]}})
+		b.Put([]byte("structure"), projectbytes)
+		return nil
 	})
 	if err != nil {
 		return errors.New("error creating project, probably already exists: " + err.Error())
