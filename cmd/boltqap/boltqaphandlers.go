@@ -252,9 +252,14 @@ func (b *boltqap) handleDocumentAction(rw http.ResponseWriter, r *http.Request, 
 	case "addRevision":
 		isRelease := query.Get("isrelease") == "on"
 		revStr := query.Get("rev")
+		description := query.Get("desc")
 		rev, err := qap.ParseRevision(revStr)
 		if err != nil {
 			httpErr(rw, "parsing revision \""+revStr+"\"", err, http.StatusBadRequest)
+			return
+		}
+		if len(description) == 0 {
+			httpErr(rw, "empty description", nil, http.StatusBadRequest)
 			return
 		}
 		if isRelease && !rev.IsRelease {
@@ -264,7 +269,7 @@ func (b *boltqap) handleDocumentAction(rw http.ResponseWriter, r *http.Request, 
 		rev.IsRelease = isRelease // override to draft status unless specified otherwise.
 		err = b.AddRevision(hd, revision{
 			Index:       rev,
-			Description: query.Get("desc"),
+			Description: description,
 		})
 		if err != nil {
 			httpErr(rw, "adding revision", err, http.StatusInternalServerError)

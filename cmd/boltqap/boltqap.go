@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
@@ -32,9 +33,22 @@ func OpenBoltQAP(dbname string, templates *template.Template) (*boltqap, error) 
 	if err != nil {
 		return nil, err
 	}
+	projects := make(map[string]qap.Project)
 	headers := make([]qap.Header, 0, 1024)
 	err = bolt.View(func(tx *bbolt.Tx) error {
 		return tx.ForEach(func(name []byte, b *bbolt.Bucket) error {
+			var project qap.Project
+			structureBytes := b.Get([]byte("structure"))
+			if len(structureBytes) > 0 {
+				err := json.Unmarshal(structureBytes, &project)
+				if err != nil {
+					log.Println("error unmarshalling project structure of", string(name), err.Error())
+				} else {
+					projects[string(name)] = project
+				}
+			} else {
+				log.Println("project structure for", string(name), "not found")
+			}
 			log.Printf("found project %s with %d keys", name, b.Stats().KeyN)
 			return b.ForEach(func(_, v []byte) error {
 				doc, err := docFromValue(v)
@@ -74,9 +88,10 @@ func abs(a int) int {
 }
 
 type boltqap struct {
-	db     *bbolt.DB
-	filter qap.HeaderFilter
-	tmpl   *template.Template
+	db       *bbolt.DB
+	filter   qap.HeaderFilter
+	tmpl     *template.Template
+	projects map[string]qap.Project
 }
 
 func (q *boltqap) CreateProject(projectName string) error {
