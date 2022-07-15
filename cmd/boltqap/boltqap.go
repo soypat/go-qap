@@ -39,11 +39,6 @@ func OpenBoltQAP(dbname string, templates *template.Template) (*boltqap, error) 
 		db:   bolt,
 		tmpl: templates,
 	}
-	log.Println("putting noba:", q.PutStructure(qap.Project{
-		Code:        [3]byte{'S', 'P', 'S'},
-		Name:        "Space-Propulsion-System",
-		Description: "Codename NOBA: \"NOBA Orbit Balancing Actor\". For small satellite systems.",
-	}))
 	headers := make([]qap.Header, 0, 1024)
 	err = q.DoDocuments(func(doc document) error {
 		hd, err := doc.Header()

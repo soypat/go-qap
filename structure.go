@@ -71,7 +71,7 @@ func (p *Project) AddEquipmentCode(code, name, description string) error {
 	case 3:
 		return p.AddType(code[0], code[1], Type{Code: code[2], Name: name, Description: description})
 	}
-	return errors.New("invalid code")
+	return errors.New("invalid code or attempted to add variant/model (not implemented)")
 }
 
 // Project returns the project code string. i.e. "LHC"
@@ -164,7 +164,7 @@ func (p *Project) AddType(sys, family byte, tp Type) error {
 	}
 	for i := range p.Systems {
 		if p.Systems[i].Code == sys {
-			p.Systems[i].AddType(family, tp)
+			return p.Systems[i].AddType(family, tp)
 		}
 	}
 	return fmt.Errorf("system %s not found in project %s", string(sys), p)
@@ -176,7 +176,7 @@ func (s *System) AddType(family byte, tp Type) error {
 	}
 	for i := range s.Families {
 		if s.Families[i].Code == family {
-			s.Families[i].AddType(tp)
+			return s.Families[i].AddType(tp)
 		}
 	}
 	return fmt.Errorf("family %s not found in system %s", string(family), s)

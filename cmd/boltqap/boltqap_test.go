@@ -104,7 +104,7 @@ func TestDoDocumentRange(t *testing.T) {
 	doc3 := doc1
 	doc3.Equipment = "C"
 	doc3.Created = time3
-	err = q.CreateProject("LHC", "Large Hadron Collider", "Collider for colliding hardrons of the small type. Large facility though")
+	err = q.CreateProject("LHC", "Large-Hadron-Collider", "Collider for colliding hardrons of the small type. Large facility though")
 	if err != nil {
 		t.Fatal(err)
 	}

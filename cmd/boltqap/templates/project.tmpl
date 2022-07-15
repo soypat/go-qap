@@ -1,6 +1,6 @@
 {{template "header"}}
 <h1>{{.}} Project Structure</h1>
-<p><strong>{{.Description}}</strong></p>
+<p class="description">{{.Description}}</p>
 {{$project := .Project}}
 <form class="main" action="">
     <strong>Add System to {{.}}:</strong>
@@ -18,6 +18,7 @@
 {{range .Systems}}
     {{$accum := .Letter}}
     <h2>{{$accum}} - {{.}}</h2>
+    <p class="description">{{.Description}}</p>
     <form class="main">
         <strong>Add Family to {{.}}:</strong>
         <input type="hidden" name="project" value="{{$project}}">
@@ -30,30 +31,36 @@
         <input name="desc" type="text" placeholder="Vacuum rated rocket engines." autocomplete="off">
         <input type="submit">
     </form>
+    <details><summary>Click to show {{.}} families</summary>
     <div style="margin-left:20px;">
     {{range .Families}}
         {{$accum := cat $accum .Letter}}
         <h3>{{$accum}} - {{.}}</h3>
+        <p class="description">{{.Description}}</p>
         <form class="main">
             <strong>Add Type to {{.}}:</strong>
             <input type="hidden" name="project" value="{{$project}}">
             <input type="hidden" name="accum" value="{{$accum}}">
-            <label for="code">Single-letter type code</label>
-            <input name="code" type="text" placeholder="R" autocomplete="off">
+            <label for="newcode">Single-letter type code</label>
+            <input name="newcode" type="text" placeholder="R" autocomplete="off">
             <label for="name">Type name</label>
             <input name="name" type="text" placeholder="Raptor" autocomplete="off">
             <label for="desc">Description</label>
             <input name="desc" type="text" placeholder="Raptor series engines" autocomplete="off">
             <input type="submit">
         </form>
+        <details><summary>Click to show {{.}} types</summary>
         <div style="margin-left:20px;">
         {{range .Types}}
             {{$accum := cat $accum .Letter}}
             <h4>{{$accum}} - {{.}}</h4>
+            <p class="description">{{.Description}}</p>
         {{end}}
         </div>
+    </details>
     {{end}}
     </div>
+    </details>
 {{end}}
 </div>
 

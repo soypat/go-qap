@@ -41,18 +41,6 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	// err = db.PutStructure(qap.Project{
-	// 	Code: [3]byte{'S', 'P', 'S'},
-	// 	Systems: []qap.System{
-	// 		{Code: 'S', Name: "Structures", Families: []qap.Family{
-	// 			{Code: 'P', Name: "Propulsion"},
-	// 			{Code: 'M', Name: "Engine+Actuator"},
-	// 		}},
-	// 		{Code: 'F', Name: "Ferreteria", Families: []qap.Family{
-	// 			{Code: 'C', Name: "Connectors"},
-	// 		}},
-	// 	},
-	// })
 	if err != nil {
 		return err
 	}
