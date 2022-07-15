@@ -176,6 +176,28 @@ func (q *boltqap) addDoc(doc document) error {
 	})
 }
 
+func (q *boltqap) DoProjects(fn func(structure qap.Project) error) error {
+	err := q.db.View(func(tx *bbolt.Tx) error {
+		return tx.ForEach(func(name []byte, b *bbolt.Bucket) error {
+			if len(name) != len("metaLHC") {
+				return nil
+			}
+			var structure qap.Project
+			v := b.Get([]byte("structure"))
+			err := json.Unmarshal(v, &structure)
+			if err != nil {
+				log.Println("error unmarshalling database structure " + string(name))
+				return nil
+			}
+			return fn(structure)
+		})
+	})
+	if errors.Is(err, ErrEndLookup) {
+		return nil
+	}
+	return err
+}
+
 func (q *boltqap) DoProjectDocuments(project string, f func(d document) error) error {
 	err := q.db.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte(project))

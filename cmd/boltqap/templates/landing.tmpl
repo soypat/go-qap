@@ -1,4 +1,11 @@
 {{template "header"}}
+<h3>Projects:</h3>
+<ul>
+{{range .Projects}}
+   <li><a href="/qap/structure?project={{.Project}}">{{.}}</a></li>
+{{end}}
+</ul>
+
 <form class="main" action="/qap/addDocument">
    <h3>New Document</h3>
    <label for="Code">Document Codes:</label>

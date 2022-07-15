@@ -143,17 +143,24 @@ func (q *boltqap) handleLanding(rw http.ResponseWriter, r *http.Request) {
 	var documents []document
 	now := time.Now()
 	end := now.AddDate(0, 0, -lastEditedDays)
+	var projects []qap.Project
 	q.DoDocumentsRange(now, end, func(d document) error {
 		documents = append(documents, d)
+		return nil
+	})
+	q.DoProjects(func(structure qap.Project) error {
+		projects = append(projects, structure)
 		return nil
 	})
 	rw.WriteHeader(200)
 	q.tmpl.Lookup("landing.tmpl").Execute(rw, struct {
 		LastEditedDays int
 		Docs           []document
+		Projects       []qap.Project
 	}{
 		LastEditedDays: lastEditedDays,
 		Docs:           documents,
+		Projects:       projects,
 	})
 }
 
