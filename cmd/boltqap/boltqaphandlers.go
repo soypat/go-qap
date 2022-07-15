@@ -17,6 +17,28 @@ import (
 	"github.com/soypat/go-qap"
 )
 
+func (q *boltqap) handleDownloadDB(rw http.ResponseWriter, r *http.Request) {
+	tx, err := q.db.Begin(false)
+	if err != nil {
+		httpErr(rw, "could not begin transaction to write DB", err, http.StatusInternalServerError)
+		return
+	}
+	var b bytes.Buffer
+	n, err := tx.WriteTo(&b)
+	if err != nil {
+		httpErr(rw, "during DB buffer out", err, http.StatusInternalServerError)
+		return
+	}
+	rw.Header().Set("Content-Type", "applications/octet-stream")
+	rw.Header().Set("Content-Disposition", "attachment;filename=\"qap.bbolt\"")
+	rw.Header().Set("Content-Length", strconv.FormatInt(n, 10))
+	_, err = io.Copy(rw, &b)
+	if err != nil {
+		httpErr(rw, "during DB write out to network", err, http.StatusInternalServerError)
+		return
+	}
+}
+
 func (q *boltqap) handleGetDocument(rw http.ResponseWriter, r *http.Request) {
 	upath := r.URL.Path[1:]
 	fpath := path.Base(upath)
@@ -25,13 +47,13 @@ func (q *boltqap) handleGetDocument(rw http.ResponseWriter, r *http.Request) {
 		hd, err = qap.ParseHeader(fpath, true)
 	}
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusBadRequest)
+		httpErr(rw, "parsing document header", err, http.StatusBadRequest)
 		return
 	}
 	log.Println("get document", hd.String())
 	doc, err := q.FindDocument(hd)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		httpErr(rw, "error looking for document", err, http.StatusInternalServerError)
 		return
 	}
 	query := r.URL.Query()
@@ -46,10 +68,13 @@ func (q *boltqap) handleGetDocument(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (q *boltqap) handleCreateProject(rw http.ResponseWriter, r *http.Request) {
-	project := r.URL.Query().Get("Code")
-	err := q.CreateProject(project)
+	query := r.URL.Query()
+	project := query.Get("newcode")
+	name := query.Get("name")
+	desc := query.Get("desc")
+	err := q.CreateProject(project, name, desc)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		httpErr(rw, "creating project", err, http.StatusInternalServerError)
 		return
 	}
 	fmt.Fprintf(rw, "project created")
@@ -63,19 +88,18 @@ func (q *boltqap) handleAddDoc(rw http.ResponseWriter, r *http.Request) {
 	}
 	newdoc, err := q.NewMainDocument(doc)
 	if err != nil {
-		log.Printf("error creating doc %#v", doc)
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		httpErr(rw, "creating doc "+doc.String(), err, http.StatusInternalServerError)
 		return
 	}
 	log.Printf("added %s", doc.String())
-	http.Redirect(rw, r, "/qap/doc/"+newdoc.String(), http.StatusTemporaryRedirect)
+	http.Redirect(rw, r, newdoc.URL(), http.StatusTemporaryRedirect)
 }
 
 func (q *boltqap) handleSearch(rw http.ResponseWriter, r *http.Request) {
 	hq := r.URL.Query()
 	query := strings.ToUpper(hq.Get("Query"))
 	if query == "" || len(query) > 22 {
-		http.Error(rw, "invalid query", http.StatusBadRequest)
+		httpErr(rw, "invalid query", nil, http.StatusBadRequest)
 		return
 	}
 	perPage, _ := strconv.Atoi(hq.Get("PerPage"))
@@ -87,7 +111,7 @@ func (q *boltqap) handleSearch(rw http.ResponseWriter, r *http.Request) {
 	log.Printf("querying: %q page %d", query, page)
 	n, total := q.filter.HumanQuery(data, query, page)
 	if n == 0 && total == 0 {
-		http.Error(rw, "query returned no results for "+query, http.StatusBadRequest)
+		httpErr(rw, "query returned no results for "+query, nil, http.StatusBadRequest)
 		return
 	}
 	err := q.tmpl.Lookup("search.tmpl").Execute(rw, struct {
@@ -109,22 +133,34 @@ func (q *boltqap) handleSearch(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (q *boltqap) handleLanding(rw http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		log.Println("unknown path ", r.URL.Path)
+		httpErr(rw, "404 page not found", nil, 404)
+		return
+	}
 	log.Println("landing")
 	const lastEditedDays = 10
 	var documents []document
 	now := time.Now()
 	end := now.AddDate(0, 0, -lastEditedDays)
+	var projects []qap.Project
 	q.DoDocumentsRange(now, end, func(d document) error {
 		documents = append(documents, d)
+		return nil
+	})
+	q.DoProjects(func(structure qap.Project) error {
+		projects = append(projects, structure)
 		return nil
 	})
 	rw.WriteHeader(200)
 	q.tmpl.Lookup("landing.tmpl").Execute(rw, struct {
 		LastEditedDays int
 		Docs           []document
+		Projects       []qap.Project
 	}{
 		LastEditedDays: lastEditedDays,
 		Docs:           documents,
+		Projects:       projects,
 	})
 }
 
@@ -161,7 +197,7 @@ func (q *boltqap) handleImportCSV(rw http.ResponseWriter, r *http.Request) {
 	}
 	f, err := files[0].Open()
 	if err != nil {
-		httpErr(rw, err.Error(), nil, http.StatusInternalServerError)
+		httpErr(rw, "opening multipart form file", err, http.StatusInternalServerError)
 		return
 	}
 	c := csv.NewReader(f)
@@ -224,15 +260,26 @@ func (b *boltqap) handleDocumentAction(rw http.ResponseWriter, r *http.Request, 
 	action := query.Get("action")
 	switch action {
 	case "addRevision":
+		isRelease := query.Get("isrelease") == "on"
 		revStr := query.Get("rev")
+		description := query.Get("desc")
 		rev, err := qap.ParseRevision(revStr)
 		if err != nil {
 			httpErr(rw, "parsing revision \""+revStr+"\"", err, http.StatusBadRequest)
 			return
 		}
+		if len(description) == 0 {
+			httpErr(rw, "empty description", nil, http.StatusBadRequest)
+			return
+		}
+		if isRelease && !rev.IsRelease {
+			httpErr(rw, "IsRelease form mismatch", nil, http.StatusBadRequest)
+			return
+		}
+		rev.IsRelease = isRelease // override to draft status unless specified otherwise.
 		err = b.AddRevision(hd, revision{
 			Index:       rev,
-			Description: query.Get("desc"),
+			Description: description,
 		})
 		if err != nil {
 			httpErr(rw, "adding revision", err, http.StatusInternalServerError)
@@ -272,7 +319,56 @@ func (b *boltqap) handleDocumentAction(rw http.ResponseWriter, r *http.Request, 
 
 	default:
 		httpErr(rw, "action not found: "+action, nil, http.StatusBadRequest)
+		return
 	}
 	log.Printf("document action %s success", action)
 	http.Redirect(rw, r, headerURL(hd), http.StatusTemporaryRedirect)
+}
+
+func (q *boltqap) handleProjectStructure(rw http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	project := query.Get("project")
+	if len(project) < 3 {
+		httpErr(rw, "project name too short", nil, http.StatusBadRequest)
+		return
+	}
+	structure, err := q.GetStructure(project[:3])
+	if err != nil {
+		httpErr(rw, "while looking for project structure", err, http.StatusInternalServerError)
+		return
+	}
+	code := query.Get("newcode")
+	if code != "" {
+		q.handleAddEquipmentCode(rw, r, structure)
+		return
+	}
+	err = q.tmpl.Lookup("project.tmpl").Execute(rw, structure)
+	if err != nil {
+		httpErr(rw, "template exec", err, http.StatusInternalServerError)
+		return
+	}
+}
+
+func (q *boltqap) handleAddEquipmentCode(rw http.ResponseWriter, r *http.Request, structure qap.Project) {
+	query := r.URL.Query()
+	code := query.Get("newcode")
+	name := reName.FindString(query.Get("name"))
+	desc := query.Get("desc")
+	if name == "" || desc == "" {
+		httpErr(rw, "invalid name or empty description", nil, http.StatusBadRequest)
+		return
+	}
+	accum := query.Get("accum")
+	err := structure.AddEquipmentCode(accum+code, name, desc)
+	if err != nil {
+		httpErr(rw, "adding equipment code", err, http.StatusInternalServerError)
+		return
+	}
+	err = q.PutStructure(structure)
+	if err != nil {
+		httpErr(rw, "modifying project structure in DB", err, http.StatusInternalServerError)
+		return
+	}
+	log.Println("added ", accum+code, " to structure: ", structure)
+	http.Redirect(rw, r, "/qap/structure?project="+structure.Project(), http.StatusTemporaryRedirect)
 }

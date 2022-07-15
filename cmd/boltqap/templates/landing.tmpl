@@ -1,8 +1,15 @@
 {{template "header"}}
+<h3>Projects:</h3>
+<ul>
+{{range .Projects}}
+   <li><a href="/qap/structure?project={{.Project}}">{{.}}</a></li>
+{{end}}
+</ul>
+
 <form class="main" action="/qap/addDocument">
    <h3>New Document</h3>
    <label for="Code">Document Codes:</label>
-   <input type="text" name="Code" placeholder="SPS-HC12-HP">
+   <input type="text" name="Code" placeholder="LHC-HCF-HP">
    <label for="HumanName">Human Name:</label>
    <input type="text" id="HumanName" name="HumanName" placeholder="Thingy version 2-final-Last.docx">
    <label for="SubmittedBy">Submitted by:</label>
@@ -20,14 +27,18 @@
 {{ range $key, $doc := .Docs }}
    <li><strong><a href="{{$doc.URL}}">{{ $doc }}</a>:</strong> Created: {{ $doc.Created.Format "2006 Jan 02 15:04"}} <span style="color:darkblue;">Submitted by: {{$doc.SubmittedBy}}</span> <span style="color:rgb(0, 67, 67)"> Human Name: {{$doc.HumanName}}</span></li>
 {{ end }}
-<a href="/qap/toCSV">
-   <button >Download Database</button>
-</a>
+<a href="/qap/toCSV"><button>Download Database (CSV)</button></a>
+<a href="/qap/downloadDB"><button>Download Database (BBolt database file)</button></a>
 
 <form class="main" action="/qap/createProject">
    <h3>New Project</h3>
-   <label for="Code">New Project:</label>
-   <input type="text" name="Code" placeholder="i.e: LHC">
+   <label for="newcode">CODE:</label>
+   <input type="text" name="newcode" placeholder="i.e: LHC">
+   <label for="name">Name</label>
+   <input type="text" name="name" placeholder="i.e: Large Hadron Collider">
+   <label for="desc">Description</label>
+   <textarea rows="1" cols="25"  name="desc" placeholder="i.e: Collider for colliding hardrons of the small type. Large facility though"></textarea>
+   <input type="submit">
 </form>
 
 <form class="main" method="post" enctype="multipart/form-data" action="/qap/importCSV">

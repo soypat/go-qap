@@ -126,3 +126,32 @@ func (d Revision) IncrementMajor(isRelease bool) (Revision, error) {
 	d.IsRelease = isRelease
 	return d, nil
 }
+
+// AreSequential tests whether b follows a as a revision, indicating whether
+// the increment between the two revisions is
+//  - A minor revision, which can be either
+//    - A draft to release increment (i.e. A.1-draft -> A.1)
+//    - A minor index increment (i.e. C.2 -> C.3 or C.2 -> C.3-draft)
+//  - A major revision (i.e. A.3 -> B.1 or A.3 -> B.1-draft)
+// It returns false for both minor and major if revisions are not in ascending
+// order, they are not a single increment apart or if they are invalid revisions.
+func AreSequential(a, b Revision) (minor, major bool) {
+	if a.Index == b.Index {
+		// Take care of draft to release increment case.
+		return !a.IsRelease && b.IsRelease, false
+	}
+	nextMinor, err := a.IncrementMinor(a.IsRelease)
+	if err != nil {
+		return false, false
+	}
+	nextMajor, err := a.IncrementMajor(a.IsRelease)
+	if err != nil {
+		return false, false
+	}
+	if b.Index == nextMinor.Index {
+		return true, false
+	} else if b.Index == nextMajor.Index {
+		return false, true
+	}
+	return false, false
+}

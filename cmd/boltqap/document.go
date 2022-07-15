@@ -134,6 +134,16 @@ func (d document) key() []byte {
 	return boltKey(d.Created)
 }
 
+func (d document) Filename() string {
+	info, _ := d.Info()
+	return strings.TrimSuffix(info.Header.String(), ".00") + " rev " + info.Revision.String() + d.FileExtension
+}
+
+func (d document) LegacyName() string {
+	info, _ := d.Info()
+	return strings.ReplaceAll(info.Header.String(), ".", "-") + "-" + info.Revision.String() + d.FileExtension
+}
+
 func (d document) Info() (qap.DocInfo, error) {
 	hd, err := d.Header()
 	if err != nil {
@@ -152,6 +162,7 @@ func (d document) Info() (qap.DocInfo, error) {
 	return di, nil
 }
 
+// Revision returns latest revision of document.
 func (d document) Revision() qap.Revision {
 	if len(d.Revisions) == 0 {
 		return qap.NewRevision()
