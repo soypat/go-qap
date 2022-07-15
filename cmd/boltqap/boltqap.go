@@ -34,10 +34,16 @@ func OpenBoltQAP(dbname string, templates *template.Template) (*boltqap, error) 
 	if err != nil {
 		return nil, err
 	}
+
 	q := &boltqap{
 		db:   bolt,
 		tmpl: templates,
 	}
+	log.Println("putting noba:", q.PutStructure(qap.Project{
+		Code:        [3]byte{'S', 'P', 'S'},
+		Name:        "Space-Propulsion-System",
+		Description: "Codename NOBA: \"NOBA Orbit Balancing Actor\". For small satellite systems.",
+	}))
 	headers := make([]qap.Header, 0, 1024)
 	err = q.DoDocuments(func(doc document) error {
 		hd, err := doc.Header()
@@ -82,7 +88,7 @@ func (q *boltqap) CreateProject(code, name, desc string) error {
 	}
 	code, _, _ = qap.ParseDocumentCodes(code)
 	if code == "" {
-		return errors.New("invalid project name: " + qap.ErrBadProjectCode.Error())
+		return qap.ErrBadProjectCode
 	}
 	err := q.db.Update(func(tx *bbolt.Tx) error {
 		_, err := tx.CreateBucket([]byte("meta" + code))
@@ -98,11 +104,14 @@ func (q *boltqap) CreateProject(code, name, desc string) error {
 	if err != nil {
 		return errors.New("error creating project, probably already exists: " + err.Error())
 	}
-	q.PutStructure(qap.Project{
+	err = q.PutStructure(qap.Project{
 		Code:        [3]byte{0: code[0], 1: code[1], 2: code[2]},
 		Name:        name,
 		Description: desc,
 	})
+	if err != nil {
+		log.Println("while putting initial project structure:", err)
+	}
 	return nil
 }
 
@@ -421,16 +430,32 @@ func (q *boltqap) PutStructure(structure qap.Project) (err error) {
 	if len(str) != 3 {
 		return errors.New("bad project code")
 	}
-	return q.db.Update(func(tx *bbolt.Tx) error {
-		b := tx.Bucket([]byte("meta" + str))
-		if b == nil {
-			return errors.New("project metadata not found")
+	metakey := []byte("meta" + str)
+	tx, err := q.db.Begin(true)
+	if err != nil {
+		return err
+	}
+	defer tx.Commit()
+	b := tx.Bucket(metakey)
+	if b == nil {
+		if tx.Bucket([]byte(str)) != nil {
+			_, err = tx.CreateBucket(metakey)
+			log.Println("project exists, attempted to create missing metadata bucket. err:", err)
+		} else {
+			tx.Rollback()
 		}
-		val, err := json.Marshal(structure)
-		if err != nil {
-			return err
-		}
-		key := []byte("structure")
-		return b.Put(key, val)
-	})
+		return errors.New("project " + str + " metadata not found, try again?")
+	}
+	val, err := json.Marshal(structure)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	key := []byte("structure")
+	err = b.Put(key, val)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	return nil
 }

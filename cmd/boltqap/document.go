@@ -133,9 +133,10 @@ func docFromRecord(record []string, ignoreTime bool) (document, error) {
 func (d document) key() []byte {
 	return boltKey(d.Created)
 }
+
 func (d document) Filename() string {
 	info, _ := d.Info()
-	return info.Header.String() + " rev " + info.Revision.String() + d.FileExtension
+	return strings.TrimSuffix(info.Header.String(), ".00") + " rev " + info.Revision.String() + d.FileExtension
 }
 
 func (d document) LegacyName() string {
