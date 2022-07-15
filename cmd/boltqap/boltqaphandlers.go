@@ -68,8 +68,11 @@ func (q *boltqap) handleGetDocument(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (q *boltqap) handleCreateProject(rw http.ResponseWriter, r *http.Request) {
-	project := r.URL.Query().Get("Code")
-	err := q.CreateProject(project)
+	query := r.URL.Query()
+	project := query.Get("newcode")
+	name := query.Get("name")
+	desc := query.Get("desc")
+	err := q.CreateProject(project, name, desc)
 	if err != nil {
 		httpErr(rw, "creating project", err, http.StatusInternalServerError)
 		return
@@ -313,4 +316,52 @@ func (b *boltqap) handleDocumentAction(rw http.ResponseWriter, r *http.Request, 
 	}
 	log.Printf("document action %s success", action)
 	http.Redirect(rw, r, headerURL(hd), http.StatusTemporaryRedirect)
+}
+
+func (q *boltqap) handleProjectStructure(rw http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	project := query.Get("project")
+	if len(project) < 3 {
+		httpErr(rw, "project name too short", nil, http.StatusBadRequest)
+		return
+	}
+	structure, err := q.GetStructure(project[:3])
+	if err != nil {
+		httpErr(rw, "while looking for project structure", err, http.StatusInternalServerError)
+		return
+	}
+	code := query.Get("newcode")
+	if code != "" {
+		q.handleAddEquipmentCode(rw, r, structure)
+		return
+	}
+	err = q.tmpl.Lookup("project.tmpl").Execute(rw, structure)
+	if err != nil {
+		httpErr(rw, "template exec", err, http.StatusInternalServerError)
+		return
+	}
+}
+
+func (q *boltqap) handleAddEquipmentCode(rw http.ResponseWriter, r *http.Request, structure qap.Project) {
+	query := r.URL.Query()
+	code := query.Get("newcode")
+	name := reName.FindString(query.Get("name"))
+	desc := query.Get("desc")
+	if name == "" || desc == "" {
+		httpErr(rw, "invalid name or empty description", nil, http.StatusBadRequest)
+		return
+	}
+	accum := query.Get("accum")
+	err := structure.AddEquipmentCode(accum+code, name, desc)
+	if err != nil {
+		httpErr(rw, "adding equipment code", err, http.StatusInternalServerError)
+		return
+	}
+	err = q.PutStructure(structure)
+	if err != nil {
+		httpErr(rw, "modifying project structure in DB", err, http.StatusInternalServerError)
+		return
+	}
+	log.Println("added ", accum+code, " to structure: ", structure)
+	http.Redirect(rw, r, "/qap/structure?project="+structure.Project(), http.StatusTemporaryRedirect)
 }

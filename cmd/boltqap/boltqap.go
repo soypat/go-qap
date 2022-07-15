@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"log"
+	"regexp"
 	"strings"
 	"time"
 
@@ -33,49 +34,24 @@ func OpenBoltQAP(dbname string, templates *template.Template) (*boltqap, error) 
 	if err != nil {
 		return nil, err
 	}
-	projects := make(map[string]qap.Project)
+	q := &boltqap{
+		db:   bolt,
+		tmpl: templates,
+	}
 	headers := make([]qap.Header, 0, 1024)
-	err = bolt.View(func(tx *bbolt.Tx) error {
-		return tx.ForEach(func(name []byte, b *bbolt.Bucket) error {
-			var project qap.Project
-			structureBytes := b.Get([]byte("structure"))
-			if len(structureBytes) > 0 {
-				err := json.Unmarshal(structureBytes, &project)
-				if err != nil {
-					log.Println("error unmarshalling project structure of", string(name), err.Error())
-				} else {
-					projects[string(name)] = project
-				}
-			} else {
-				log.Println("project structure for", string(name), "not found")
-			}
-			log.Printf("found project %s with %d keys", name, b.Stats().KeyN)
-			return b.ForEach(func(_, v []byte) error {
-				doc, err := docFromValue(v)
-				if err != nil {
-					return err
-				}
-				if doc.Deleted {
-					return nil
-				}
-				hd, err := doc.Header()
-				if err != nil {
-					return err
-				}
-				headers = append(headers, hd)
-				return nil
-			})
-
-		})
+	err = q.DoDocuments(func(doc document) error {
+		hd, err := doc.Header()
+		if err != nil {
+			return err
+		}
+		headers = append(headers, hd)
+		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("initializing headers from file data: %s", err)
 	}
-	return &boltqap{
-		db:     bolt,
-		filter: qap.NewHeaderFilter(headers),
-		tmpl:   templates,
-	}, nil
+	q.filter = qap.NewHeaderFilter(headers)
+	return q, nil
 }
 
 func (q *boltqap) Close() error { return q.db.Close() }
@@ -94,26 +70,39 @@ type boltqap struct {
 	projects map[string]qap.Project
 }
 
-func (q *boltqap) CreateProject(projectName string) error {
-	if len(projectName) != 3 || strings.ToUpper(projectName) != projectName {
+var reName = regexp.MustCompile(`^[a-zA-Z+-]+$`)
+
+func (q *boltqap) CreateProject(code, name, desc string) error {
+	if len(code) != 3 || strings.ToUpper(code) != code {
 		return errors.New("project name must be of length 3 and all upper case")
 	}
-	projectName, _, _ = qap.ParseDocumentCodes(projectName)
-	if projectName == "" {
+	name = reName.FindString(name)
+	if name == "" || desc == "" {
+		return errors.New("empty description or invalid name")
+	}
+	code, _, _ = qap.ParseDocumentCodes(code)
+	if code == "" {
 		return errors.New("invalid project name: " + qap.ErrBadProjectCode.Error())
 	}
 	err := q.db.Update(func(tx *bbolt.Tx) error {
-		b, err := tx.CreateBucket([]byte(projectName))
+		_, err := tx.CreateBucket([]byte("meta" + code))
 		if err != nil {
 			return err
 		}
-		projectbytes, _ := json.Marshal(qap.Project{Code: [3]byte{0: projectName[0], 1: projectName[1], 2: projectName[2]}})
-		b.Put([]byte("structure"), projectbytes)
+		_, err = tx.CreateBucket([]byte(code))
+		if err != nil {
+			return err
+		}
 		return nil
 	})
 	if err != nil {
 		return errors.New("error creating project, probably already exists: " + err.Error())
 	}
+	q.PutStructure(qap.Project{
+		Code:        [3]byte{0: code[0], 1: code[1], 2: code[2]},
+		Name:        name,
+		Description: desc,
+	})
 	return nil
 }
 
@@ -146,6 +135,10 @@ func (q *boltqap) NewMainDocument(doc document) (newdoc document, err error) {
 		}
 		return nil
 	})
+	structure, err := q.GetStructure(doc.Project)
+	if !structure.ContainsCode(info.Header) {
+		return document{}, errors.New("equipment code is not defined in project structure. Must be added first.")
+	}
 	doc.Number = int(maxCode) + 1
 	err = q.addDoc(doc)
 	if err != nil {
@@ -205,8 +198,11 @@ func (q *boltqap) DoProjectDocuments(project string, f func(d document) error) e
 }
 
 func (q *boltqap) DoDocuments(f func(d document) error) error {
-	return q.db.View(func(tx *bbolt.Tx) error {
+	err := q.db.View(func(tx *bbolt.Tx) error {
 		return tx.ForEach(func(name []byte, b *bbolt.Bucket) error {
+			if len(name) != 3 {
+				return nil
+			}
 			return b.ForEach(func(k, v []byte) error {
 				doc, err := docFromValue(v)
 				if err != nil {
@@ -215,12 +211,19 @@ func (q *boltqap) DoDocuments(f func(d document) error) error {
 				}
 				err = f(doc)
 				if errors.Is(err, ErrEndLookup) {
-					return nil
+					return ErrEndLookup
+				}
+				if err != nil {
+					log.Println(err, string(k), string(v))
 				}
 				return err
 			})
 		})
 	})
+	if errors.Is(err, ErrEndLookup) {
+		return nil
+	}
+	return err
 }
 
 func (q *boltqap) DoDocumentsRange(startTime, endTime time.Time, f func(d document) error) error {
@@ -238,6 +241,9 @@ func (q *boltqap) DoDocumentsRange(startTime, endTime time.Time, f func(d docume
 	}
 	return q.db.View(func(tx *bbolt.Tx) error {
 		return tx.ForEach(func(name []byte, b *bbolt.Bucket) error {
+			if len(name) != 3 {
+				return nil
+			}
 			c := b.Cursor()
 			next := getIterator(c)
 			k, v := c.Seek(start)
@@ -371,4 +377,38 @@ func (q *boltqap) importDocuments(tx *bbolt.Tx, documents []document) error {
 		}
 	}
 	return nil
+}
+
+func (q *boltqap) GetStructure(project string) (structure qap.Project, err error) {
+	if len(project) != 3 {
+		return structure, qap.ErrBadProjectCode
+	}
+	name := "meta" + project
+	return structure, q.db.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(name))
+		if b == nil {
+			return errors.New("project metadata not found")
+		}
+		v := b.Get([]byte("structure"))
+		return json.Unmarshal(v, &structure)
+	})
+}
+
+func (q *boltqap) PutStructure(structure qap.Project) (err error) {
+	str := structure.Project()
+	if len(str) != 3 {
+		return errors.New("bad project code")
+	}
+	return q.db.Update(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("meta" + str))
+		if b == nil {
+			return errors.New("project metadata not found")
+		}
+		val, err := json.Marshal(structure)
+		if err != nil {
+			return err
+		}
+		key := []byte("structure")
+		return b.Put(key, val)
+	})
 }

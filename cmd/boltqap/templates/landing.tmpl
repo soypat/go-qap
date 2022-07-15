@@ -25,8 +25,13 @@
 
 <form class="main" action="/qap/createProject">
    <h3>New Project</h3>
-   <label for="Code">New Project:</label>
-   <input type="text" name="Code" placeholder="i.e: LHC">
+   <label for="newcode">CODE:</label>
+   <input type="text" name="newcode" placeholder="i.e: LHC">
+   <label for="name">Name</label>
+   <input type="text" name="name" placeholder="i.e: Large Hadron Collider">
+   <label for="desc">Description</label>
+   <textarea rows="1" cols="25"  name="desc" placeholder="i.e: Collider for colliding hardrons of the small type. Large facility though"></textarea>
+   <input type="submit">
 </form>
 
 <form class="main" method="post" enctype="multipart/form-data" action="/qap/importCSV">

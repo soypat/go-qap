@@ -54,7 +54,7 @@ func TestBoltStore(t *testing.T) {
 		Created:       time1,
 		Revised:       time1,
 	}
-	err = q.CreateProject(doc1.Project)
+	err = q.CreateProject(doc1.Project, "name", "desc")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestDoDocumentRange(t *testing.T) {
 	time2 := time1.AddDate(10, 0, 0)
 	time3 := time2.AddDate(10, 0, 0)
 	doc1 := document{
-		Project:       "SPS",
+		Project:       "LHC",
 		Equipment:     "A",
 		DocType:       "HP",
 		SubmittedBy:   "pato",
@@ -104,7 +104,7 @@ func TestDoDocumentRange(t *testing.T) {
 	doc3 := doc1
 	doc3.Equipment = "C"
 	doc3.Created = time3
-	err = q.CreateProject("SPS")
+	err = q.CreateProject("LHC", "Large Hadron Collider", "Collider for colliding hardrons of the small type. Large facility though")
 	if err != nil {
 		t.Fatal(err)
 	}

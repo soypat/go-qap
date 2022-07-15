@@ -9,6 +9,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/soypat/go-qap"
 )
@@ -39,6 +41,21 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// err = db.PutStructure(qap.Project{
+	// 	Code: [3]byte{'S', 'P', 'S'},
+	// 	Systems: []qap.System{
+	// 		{Code: 'S', Name: "Structures", Families: []qap.Family{
+	// 			{Code: 'P', Name: "Propulsion"},
+	// 			{Code: 'M', Name: "Engine+Actuator"},
+	// 		}},
+	// 		{Code: 'F', Name: "Ferreteria", Families: []qap.Family{
+	// 			{Code: 'C', Name: "Connectors"},
+	// 		}},
+	// 	},
+	// })
+	if err != nil {
+		return err
+	}
 	defer db.Close()
 	sv := http.NewServeMux()
 	sv.HandleFunc("/", db.handleLanding)
@@ -49,6 +66,7 @@ func run() error {
 	sv.HandleFunc("/qap/importCSV", db.handleImportCSV)
 	sv.HandleFunc("/qap/downloadDB", db.handleDownloadDB)
 	sv.HandleFunc("/qap/doc/", db.handleGetDocument)
+	sv.HandleFunc("/qap/structure", db.handleProjectStructure)
 	log.Println("Server running http://127.0.0.1" + addr)
 	return http.ListenAndServe(addr, sv)
 }
@@ -57,7 +75,7 @@ func httpErr(w http.ResponseWriter, msg string, err error, code int) {
 	if err != nil {
 		msg = msg + ": " + err.Error()
 	}
-	msg = "<h4>" + msg + "</h4>"
+	msg = "<h4>" + strconv.Itoa(code) + " - " + msg + "</h4>"
 	log.Println(msg)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(code)
@@ -102,6 +120,9 @@ var funcs = template.FuncMap{
 			return template.HTML(err.Error())
 		}
 		return template.HTML(b)
+	},
+	"cat": func(str ...string) string {
+		return strings.Join(str, "")
 	},
 }
 
