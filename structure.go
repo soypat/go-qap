@@ -61,17 +61,22 @@ type Variant struct {
 	Description string
 }
 
+// AddEquipmentCode adds a new equipment code to the project structure along
+// with a name and description.
+// code must be a 1..5 length upper case string consisting of any letters
+// in A..Z range. They correspond to the middle group of letters in a
+// document name i.e. BBBBB in document name AAA-BBBBB-CC-000.00.
 func (p *Project) AddEquipmentCode(code, name, description string) error {
 	code = validQAPAlpha([]byte(code))
 	switch len(code) {
 	case 1:
-		return p.AddSystem(System{Code: code[0], Name: name, Description: description})
+		return p.addSystem(System{Code: code[0], Name: name, Description: description})
 	case 2:
-		return p.AddFamily(code[0], Family{Code: code[1], Name: name, Description: description})
+		return p.addFamily(code[0], Family{Code: code[1], Name: name, Description: description})
 	case 3:
-		return p.AddType(code[0], code[1], Type{Code: code[2], Name: name, Description: description})
+		return p.addType(code[0], code[1], Type{Code: code[2], Name: name, Description: description})
 	}
-	return errors.New("invalid code or attempted to add variant/model (not implemented)")
+	return errors.New("empty/invalid code or attempted to add variant/model (not implemented)")
 }
 
 // Project returns the project code string. i.e. "LHC"
@@ -118,7 +123,7 @@ func (v Variant) String() string {
 	return v.Name
 }
 
-func (p *Project) AddSystem(sys System) error {
+func (p *Project) addSystem(sys System) error {
 	if !isAlpha(sys.Code) {
 		return ErrBadEquipmentCode
 	}
@@ -132,20 +137,20 @@ func (p *Project) AddSystem(sys System) error {
 	return nil
 }
 
-func (p *Project) AddFamily(sys byte, family Family) error {
+func (p *Project) addFamily(sys byte, family Family) error {
 	if !isAlpha(sys) || !isAlpha(family.Code) {
 		return ErrBadEquipmentCode
 	}
 	for i := range p.Systems {
 		code := p.Systems[i].Code
 		if code == sys {
-			return p.Systems[i].AddFamily(family)
+			return p.Systems[i].addFamily(family)
 		}
 	}
 	return fmt.Errorf("system %s not found in project %s", string(sys), p)
 }
 
-func (s *System) AddFamily(family Family) error {
+func (s *System) addFamily(family Family) error {
 	if !isAlpha(family.Code) {
 		return ErrBadEquipmentCode
 	}
@@ -158,31 +163,31 @@ func (s *System) AddFamily(family Family) error {
 	return nil
 }
 
-func (p *Project) AddType(sys, family byte, tp Type) error {
+func (p *Project) addType(sys, family byte, tp Type) error {
 	if !isAlpha(sys) || !isAlpha(family) || !isAlpha(tp.Code) {
 		return ErrBadEquipmentCode
 	}
 	for i := range p.Systems {
 		if p.Systems[i].Code == sys {
-			return p.Systems[i].AddType(family, tp)
+			return p.Systems[i].addType(family, tp)
 		}
 	}
 	return fmt.Errorf("system %s not found in project %s", string(sys), p)
 }
 
-func (s *System) AddType(family byte, tp Type) error {
+func (s *System) addType(family byte, tp Type) error {
 	if !isAlpha(family) || !isAlpha(tp.Code) {
 		return ErrBadEquipmentCode
 	}
 	for i := range s.Families {
 		if s.Families[i].Code == family {
-			return s.Families[i].AddType(tp)
+			return s.Families[i].addType(tp)
 		}
 	}
 	return fmt.Errorf("family %s not found in system %s", string(family), s)
 }
 
-func (f *Family) AddType(tp Type) error {
+func (f *Family) addType(tp Type) error {
 	if !isAlpha(tp.Code) {
 		return ErrBadEquipmentCode
 	}
