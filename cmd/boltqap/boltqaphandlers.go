@@ -138,13 +138,28 @@ func (q *boltqap) handleLanding(rw http.ResponseWriter, r *http.Request) {
 		httpErr(rw, "404 page not found", nil, 404)
 		return
 	}
+	showInvalid := r.URL.Query().Has("showinvalid")
 	log.Println("landing")
-	const lastEditedDays = 10
+	const lastEditedDays = 30 * 6
 	var documents []document
 	now := time.Now()
 	end := now.AddDate(0, 0, -lastEditedDays)
 	var projects []qap.Project
 	q.DoDocumentsRange(now, end, func(d document) error {
+		if len(d.Revisions) != 0 {
+			// skip if last revision starts with "invalid string"
+			desc := d.Revisions[len(d.Revisions)-1].Description
+			desc = strings.ToLower(desc[:min(len(desc), len("invalid"))])
+			if strings.HasPrefix(desc, "invalid") {
+				if showInvalid {
+					documents = append(documents, d)
+				}
+				return nil
+			}
+		}
+		if showInvalid {
+			return nil
+		}
 		documents = append(documents, d)
 		return nil
 	})
@@ -371,4 +386,11 @@ func (q *boltqap) handleAddEquipmentCode(rw http.ResponseWriter, r *http.Request
 	}
 	log.Println("added ", accum+code, " to structure: ", structure)
 	http.Redirect(rw, r, "/qap/structure?project="+structure.Project(), http.StatusTemporaryRedirect)
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
