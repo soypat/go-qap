@@ -112,6 +112,9 @@ func (q *boltqap) CreateProject(code, name, desc string) error {
 
 func (q *boltqap) NewDocument(doc document) error {
 	info, err := doc.ValidateForAdmission()
+	if err != nil {
+		return err
+	}
 	err = q.filter.Do(func(_ int, h qap.Header) error {
 		if qap.HeadersEqual(h, info.Header) {
 			return errors.New("document already exists:" + h.String())

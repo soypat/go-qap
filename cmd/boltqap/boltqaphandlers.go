@@ -320,11 +320,13 @@ func (b *boltqap) handleDocumentAction(rw http.ResponseWriter, r *http.Request, 
 			httpErr(rw, "attachment malformed", err, http.StatusInternalServerError)
 			return
 		}
+		log.Printf("prepare to add %s attachment", doc.String())
 		err = b.NewDocument(attachment)
 		if err != nil {
 			httpErr(rw, "adding attachment to DB ", err, http.StatusInternalServerError)
 			return
 		}
+		log.Printf("attachment %s add success. Linking attachment to main document now", doc.String())
 		doc.Attachments = append(doc.Attachments, ainfo.Header)
 		err = b.Update(doc)
 		if err != nil {
