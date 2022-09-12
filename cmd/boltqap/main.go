@@ -55,6 +55,8 @@ func run() error {
 	sv.HandleFunc("/qap/downloadDB", db.handleDownloadDB)
 	sv.HandleFunc("/qap/doc/", db.handleGetDocument)
 	sv.HandleFunc("/qap/structure", db.handleProjectStructure)
+	sv.HandleFunc("/service", db.handleServiceCheck)
+
 	log.Println("Server running http://127.0.0.1" + addr)
 	return http.ListenAndServe(addr, sv)
 }

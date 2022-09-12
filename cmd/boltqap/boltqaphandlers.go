@@ -17,6 +17,26 @@ import (
 	"github.com/soypat/go-qap"
 )
 
+func (q *boltqap) handleServiceCheck(rw http.ResponseWriter, r *http.Request) {
+	existing := q.filter.Len()
+	got := 0
+	start := time.Now()
+	var elapsed time.Duration
+	go func() {
+		_ = q.DoDocuments(func(d document) error {
+			got++
+			return nil
+		})
+		elapsed = time.Since(start)
+	}()
+	time.Sleep(300 * time.Millisecond)
+	if elapsed == 0 {
+		fmt.Fprintf(rw, "Could not parse all documents! Existing:%d. got from database: %d", existing, got)
+	} else {
+		fmt.Fprintf(rw, "Parsed database in %s: Existing:%d, got %d", elapsed, existing, got)
+	}
+}
+
 func (q *boltqap) handleDownloadDB(rw http.ResponseWriter, r *http.Request) {
 	tx, err := q.db.Begin(false)
 	if err != nil {
