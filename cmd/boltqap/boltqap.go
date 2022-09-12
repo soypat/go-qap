@@ -433,27 +433,23 @@ func (q *boltqap) PutStructure(structure qap.Project) (err error) {
 	if err != nil {
 		return err
 	}
-	defer tx.Commit()
+	defer tx.Rollback()
 	b := tx.Bucket(metakey)
 	if b == nil {
 		if tx.Bucket([]byte(str)) != nil {
 			_, err = tx.CreateBucket(metakey)
 			log.Println("project exists, attempted to create missing metadata bucket. err:", err)
-		} else {
-			tx.Rollback()
 		}
 		return errors.New("project " + str + " metadata not found, try again?")
 	}
 	val, err := json.Marshal(structure)
 	if err != nil {
-		tx.Rollback()
 		return err
 	}
 	key := []byte("structure")
 	err = b.Put(key, val)
 	if err != nil {
-		tx.Rollback()
 		return err
 	}
-	return nil
+	return tx.Commit()
 }

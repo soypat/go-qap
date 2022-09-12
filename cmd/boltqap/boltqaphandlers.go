@@ -43,6 +43,7 @@ func (q *boltqap) handleDownloadDB(rw http.ResponseWriter, r *http.Request) {
 		httpErr(rw, "could not begin transaction to write DB", err, http.StatusInternalServerError)
 		return
 	}
+	defer tx.Rollback()
 	var b bytes.Buffer
 	n, err := tx.WriteTo(&b)
 	if err != nil {
@@ -70,7 +71,7 @@ func (q *boltqap) handleGetDocument(rw http.ResponseWriter, r *http.Request) {
 		httpErr(rw, "parsing document header", err, http.StatusBadRequest)
 		return
 	}
-	log.Println("get document", hd.String())
+	log.Println("get document", hd.String(), " @ ", upath)
 	doc, err := q.FindDocument(hd)
 	if err != nil {
 		httpErr(rw, "error looking for document", err, http.StatusInternalServerError)
@@ -293,6 +294,7 @@ func (q *boltqap) handleImportCSV(rw http.ResponseWriter, r *http.Request) {
 func (b *boltqap) handleDocumentAction(rw http.ResponseWriter, r *http.Request, doc document, query url.Values) {
 	hd, _ := doc.Header()
 	action := query.Get("action")
+	log.Println("begin action", action, "for", hd.String())
 	switch action {
 	case "addRevision":
 		isRelease := query.Get("isrelease") == "on"
